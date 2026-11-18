@@ -1,5 +1,7 @@
 # Kalani: A Farmer's Assistant
 
+Created by [roniejosephv-star](https://github.com/roniejosephv-star).
+
 Native SwiftUI iPhone client for English and Tamil, with one TypeScript Pi Durable backend. Choose a language on first launch or change it under My Farm → Language and audio. Pi owns conversations, checkpointed workflows and authoritative application records. Claude uses Pi's Anthropic provider; speech uses a separate Sarvam adapter. UI styling remains deferred.
 
 Implementation and verification limits are recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). Product scope remains in [PRD.md](PRD.md) and [PRODUCT_SPECIFICATIONS.md](PRODUCT_SPECIFICATIONS.md); HTTP interfaces are in [API_CONTRACT.md](API_CONTRACT.md).

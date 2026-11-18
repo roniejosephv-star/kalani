@@ -4,3 +4,8 @@
 - Preserve existing source filenames and technical identifiers unless renaming them is explicitly part of the task.
 - Kalani supports **English and Tamil**, with a user-controlled language switch. Do not describe it as Tamil-only or use outdated Tamil-only screenshots as the primary usability evidence.
 - Present the pitch and invigilator demonstration in **English by default**. Include two actual screens showing the English/Tamil language switch, and leave the evaluation session in English.
+
+# Project attribution
+
+- Kalani was created by **roniejosephv-star**. Do not infer project authorship from the account used to access development tools.
+- Use `roniejosephv-star` for this repository's Git author and committer identity. Keep this configuration local to this repository; do not change the global Git identity.
