@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>CFBundleDisplayName</key><string>பண்ணை உதவி</string>
+<key>CFBundleDisplayName</key><string>Kalani</string>
 <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 <key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
 <key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
@@ -9,7 +9,7 @@
 <key>CFBundleShortVersionString</key><string>0.1.0</string>
 <key>CFBundleVersion</key><string>1</string>
 <key>LSRequiresIPhoneOS</key><true/>
-<key>NSMicrophoneUsageDescription</key><string>உங்கள் கேள்வியை ஒலியாகப் பதிவு செய்ய மைக்ரோஃபோன் தேவை. அனுப்புவதற்கு முன் கேட்கவும் நீக்கவும் முடியும்.</string>
+<key>NSMicrophoneUsageDescription</key><string>Kalani uses your microphone to record questions. உங்கள் கேள்வியைப் பதிவு செய்ய மைக்ரோஃபோன் தேவை.</string>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/><key>NSExceptionDomains</key><dict><key>localhost</key><dict><key>NSExceptionAllowsInsecureHTTPLoads</key><true/></dict></dict></dict>
 <key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
 <key>UILaunchScreen</key><dict/>

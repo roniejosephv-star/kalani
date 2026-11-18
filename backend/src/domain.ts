@@ -1,12 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { defineDoc, type JsonObject } from '@earendil-works/pi-durable';
-import { SPEECH_TEXT_LIMIT, type Evidence } from './adapters.js';
+import { DEFAULT_LOCALE, SPEECH_TEXT_LIMIT, type Evidence, type FarmLocale } from './adapters.js';
 
 export class AppError extends Error {
   constructor(public code: string, message: string, public status = 400) { super(message); }
 }
 export type FactValue = string | number;
-export type Message = { id: string; role: 'farmer' | 'assistant'; text: string; audioId?: string; status: 'queued' | 'processing' | 'ready' | 'failed' | 'superseded'; audioStatus?: 'pending' | 'ready' | 'failed' | 'unconfigured'; createdAt: string; contextVersion: number; error?: string; evidenceIds?: string[]; workflowId?: number; attempt?: number; trigger?: 'farmer' | 'scheduled'; proposedFacts?: Record<string, FactValue> };
+export type Message = { id: string; role: 'farmer' | 'assistant'; text: string; locale?: FarmLocale; audioId?: string; status: 'queued' | 'processing' | 'ready' | 'failed' | 'superseded'; audioStatus?: 'pending' | 'ready' | 'failed' | 'unconfigured'; createdAt: string; contextVersion: number; error?: string; evidenceIds?: string[]; workflowId?: number; attempt?: number; trigger?: 'farmer' | 'scheduled'; proposedFacts?: Record<string, FactValue> };
 export type FarmTask = { id: string; version: number; contextVersion: number; fieldId: string; cycleId: string; title: string; reason: string; dueAt: string; validUntil: string; status: 'proposed' | 'approved' | 'postponed' | 'completed' | 'rejected' | 'superseded'; evidenceIds: string[]; uncertainty: string[]; waitTaskId?: number };
 export type Decision = { id: string; taskId: string; version: number; decision: 'approved' | 'postponed' | 'completed' | 'rejected'; actor: string; at: string; consumed: boolean };
 export type AppEvent = { sequence: number; type: string; at: string; reference?: string };
@@ -17,7 +17,7 @@ export type EvidenceRecord = JsonObject & { id: string; source: string; url: str
 export type FarmerState = {
  owner: string; version: number; fieldId: string; cycleId: string; facts: Record<string, FactValue>;
  contexts: Record<string, { facts: Record<string, FactValue>; version: number; fieldId: string; cycleId: string }>;
- preferences: { locale: 'ta-IN'; notifications: boolean; quietStart: number; quietEnd: number };
+ preferences: { locale: FarmLocale; notifications: boolean; quietStart: number; quietEnd: number };
  messages: Message[]; tasks: FarmTask[]; evidence: EvidenceRecord[]; decisions: Decision[]; notifications: Notification[]; playbooks: Playbook[];
  experiences: { id: string; taskId: string; at: string; origin: 'farmer_reported'; text: string; fieldId: string; cycleId: string }[];
  memories: { key: string; value: FactValue; at: string; confirmedBy: string; contextVersion: number }[];
@@ -27,7 +27,7 @@ export type FarmerState = {
  traces: { role: string; at: string; messageId: string; evidenceIds: string[]; summary: string; contextVersion: number }[];
  deleted: boolean; scheduleRevision: number;
 };
-export const emptyFarmer = (): FarmerState => ({ owner: '', version: 0, fieldId: 'field-1', cycleId: 'cycle-1', facts: {}, contexts: {}, preferences: { locale: 'ta-IN', notifications: false, quietStart: 20, quietEnd: 7 }, messages: [], tasks: [], evidence: [], decisions: [], notifications: [], playbooks: [], experiences: [], memories: [], proposals: [], activeRelease: 'farm-v1', events: [], sequence: 0, requests: {}, media: {}, traces: [], deleted: false, scheduleRevision: 0 });
+export const emptyFarmer = (): FarmerState => ({ owner: '', version: 0, fieldId: 'field-1', cycleId: 'cycle-1', facts: {}, contexts: {}, preferences: { locale: DEFAULT_LOCALE, notifications: false, quietStart: 20, quietEnd: 7 }, messages: [], tasks: [], evidence: [], decisions: [], notifications: [], playbooks: [], experiences: [], memories: [], proposals: [], activeRelease: 'farm-v1', events: [], sequence: 0, requests: {}, media: {}, traces: [], deleted: false, scheduleRevision: 0 });
 export const FarmDoc = defineDoc<FarmerState>({ kind: 'farm.state.v1', version: 1, scope: 'conversation', history: 'latest', fork: 'initial', initial: emptyFarmer, checkpointWhen: () => true });
 export const DirectoryDoc = defineDoc<{ farmers: Record<string, number> }>({ kind: 'farm.directory.v1', version: 1, scope: 'session', initial: () => ({ farmers: {} }), checkpointWhen: () => true });
 export const MetricsDoc = defineDoc<{ operations: Record<string, { calls:number; failures:number; totalMs:number; recentMs:number[] }> }>({ kind:'farm.metrics.v1',version:1,scope:'session',initial:()=>({operations:{}}),checkpointWhen:()=>true });
@@ -119,24 +119,25 @@ export function parseSpecialist(raw:string, evidence:readonly Evidence[]):Specia
  if(typeof p.summary!=='string'||!p.summary.trim()||typeof p.applicability!=='string'||!strings(p.missingFacts)||!strings(p.uncertainty))throw new ModelOutputError(code,'shape');
  return {summary:p.summary,evidenceIds:p.evidenceIds,applicability:p.applicability,missingFacts:p.missingFacts,uncertainty:p.uncertainty};
 }
-export function decodePlan(raw:string):PlanOutput {
+const hasLocaleScript = (text:string,locale:FarmLocale) => (locale==='ta-IN'?/[\u0B80-\u0BFF]/:/[A-Za-z]{2,}/).test(text);
+export function decodePlan(raw:string,locale:FarmLocale=DEFAULT_LOCALE):PlanOutput {
  const code='invalid_model_output';
  const p=outputObject(raw,code);
- if((p.kind!=='guidance'&&p.kind!=='clarification'&&p.kind!=='refusal')||typeof p.text!=='string'||[...p.text].length>SPEECH_TEXT_LIMIT||!/[\u0B80-\u0BFF]/.test(p.text)||!strings(p.evidenceIds)||!strings(p.missingFacts)||!strings(p.uncertainty)||!Array.isArray(p.tasks)||p.tasks.length>7||(p.proposedFacts!==undefined&&!object(p.proposedFacts)))throw new ModelOutputError(code,'shape');
- if(p.tasks.some(t=>!object(t)||typeof t.title!=='string'||typeof t.reason!=='string'||typeof t.dueAt!=='string'||!strings(t.evidenceIds)||!strings(t.uncertainty)))throw new ModelOutputError(code,'shape');
+ if((p.kind!=='guidance'&&p.kind!=='clarification'&&p.kind!=='refusal')||typeof p.text!=='string'||[...p.text].length>SPEECH_TEXT_LIMIT||!hasLocaleScript(p.text,locale)||!strings(p.evidenceIds)||!strings(p.missingFacts)||!strings(p.uncertainty)||!Array.isArray(p.tasks)||p.tasks.length>7||(p.proposedFacts!==undefined&&!object(p.proposedFacts)))throw new ModelOutputError(code,'shape');
+ if(p.tasks.some(t=>!object(t)||typeof t.title!=='string'||!hasLocaleScript(t.title,locale)||typeof t.reason!=='string'||typeof t.dueAt!=='string'||!strings(t.evidenceIds)||!strings(t.uncertainty)))throw new ModelOutputError(code,'shape');
  return p as PlanOutput;
 }
-export function parsePlan(raw: string, evidence: readonly EvidenceRecord[], now = Date.now()): PlanOutput {
- const p=decodePlan(raw);
+export function parsePlan(raw: string, evidence: readonly EvidenceRecord[], now = Date.now(),locale:FarmLocale=DEFAULT_LOCALE): PlanOutput {
+ const p=decodePlan(raw,locale);
  if (p.proposedFacts) validateFacts(p.proposedFacts);
- const chemical = /dose|dosage|pesticid|fungicid|herbicid|fertiliz|spray|உரம்|மருந்து|தெளி|பூச்சிக்கொல்லி|ரசாயன/i;
+ const chemical = /dose|dosage|pesticid|fungicid|herbicid|fertili[sz]|spray|உரம்|மருந்து|தெளி|பூச்சிக்கொல்லி|ரசாயன/i;
  const amount = /[0-9௦-௯]|millilitr|kilogram|gram|ml|mg|litre|லிட்டர்|மில்லி|கிலோ|கிராம்|ஸ்பூன்/i;
  const allText = [p.text, ...p.tasks.map(t => `${t.title} ${t.reason}`)].join(' ');
  if (chemical.test(allText) && (p.kind !== 'refusal' || amount.test(allText))) throw new AppError('expert_review_required', 'Chemical advice cannot be verified in this release.', 502);
  const ids = new Set(evidence.map(e => e.id));
  if (p.evidenceIds.some(id => !ids.has(id)) || (p.kind === 'guidance' && p.evidenceIds.length === 0) || (p.kind !== 'guidance' && p.tasks.length)) throw new AppError('unsupported_claim', 'Guidance has no matching source.', 502);
  for (const t of p.tasks) {
-  if (!/[\u0B80-\u0BFF]/.test(t.title) || !t.evidenceIds.length || !Number.isFinite(Date.parse(t.dueAt)) || Date.parse(t.dueAt) < now || Date.parse(t.dueAt) > now + 7*86400000 || t.evidenceIds.some(id => !evidence.some(e => e.id === id && e.status === 'current' && e.validUntil && Date.parse(e.validUntil) > Date.parse(t.dueAt)))) throw new AppError('invalid_task', 'A proposed task has expired or unsupported evidence.', 502);
+  if (!t.evidenceIds.length || !Number.isFinite(Date.parse(t.dueAt)) || Date.parse(t.dueAt) < now || Date.parse(t.dueAt) > now + 7*86400000 || t.evidenceIds.some(id => !evidence.some(e => e.id === id && e.status === 'current' && e.validUntil && Date.parse(e.validUntil) > Date.parse(t.dueAt)))) throw new AppError('invalid_task', 'A proposed task has expired or unsupported evidence.', 502);
   // v1 never schedules chemical interventions, even when a model supplies a citation.
   if (/dose|pesticid|fungicid|herbicid|spray|dosage|உரம்|மருந்து|தெளி|பூச்சிக்கொல்லி|ரசாயன/i.test(`${t.title} ${t.reason}`)) throw new AppError('expert_review_required', 'Chemical interventions require reviewed expert guidance.', 502);
  }

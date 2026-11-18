@@ -44,6 +44,33 @@ test('repeated message submissions produce one durable workflow and one reply',a
  await assert.rejects(app.submit(owner,{...input,text:'different'}),{code:'idempotency_conflict'});
 }));
 
+test('five synthetic farms keep weather scoped; changing location without coordinates asks for clarification',async()=>withApp(async app=>{
+ for(const [index,profile]of profiles.entries()){
+  const farmer=`weather-demo-${index}`;
+  await seed(app,farmer,profile);
+  const current=await app.state(farmer);
+  if(index===profiles.length-1){
+   await app.facts(farmer,{requestId:'clear-district-0001',expectedVersion:current.version,fieldId:current.fieldId,cycleId:current.cycleId,facts:{district:'முன்னைய மாவட்டம்',latitude:profile.latitude,longitude:profile.longitude}});
+   const located=await app.state(farmer);
+   await app.facts(farmer,{requestId:'clear-district-0002',expectedVersion:located.version,fieldId:located.fieldId,cycleId:located.cycleId,facts:{district:''}});
+  }
+  await app.submit(farmer,{requestId:'synthetic-weather-001',text:'இந்த வாரம் மழை பெய்யுமா?'});
+  const state=await waitState(app,s=>s.messages.some(m=>m.role==='assistant'),farmer);
+  const reply=state.messages.find(m=>m.role==='assistant')!;
+  assert.ok(state.events.some(e=>e.type==='source.unconfigured'&&e.reference?.endsWith(':market')));
+  if(index===profiles.length-1){
+   assert.equal(state.facts.latitude,undefined);
+   assert.equal(state.facts.longitude,undefined);
+   assert.equal(reply.text,'உங்கள் வயல் எங்கே உள்ளது?');
+   assert.deepEqual(reply.evidenceIds,[]);
+   assert.deepEqual(state.tasks,[]);
+  }else{
+   assert.deepEqual(reply.evidenceIds,['synthetic-weather']);
+   assert.deepEqual(state.evidence[0]?.scope,{latitude:profile.latitude,longitude:profile.longitude});
+  }
+ }
+}));
+
 test('approval binds owner and exact task version; completion is an independent report',async()=>withApp(async app=>{
  await seed(app);await app.submit(owner,{requestId:'decision-message-01',text:'திட்டம்'});
  const state=await waitState(app,s=>s.tasks.length===1);const task=state.tasks[0]!;

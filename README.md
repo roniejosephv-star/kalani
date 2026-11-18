@@ -1,6 +1,6 @@
 # Kalani: A Farmer's Assistant
 
-Native SwiftUI iPhone client and one TypeScript Pi Durable backend. Pi owns conversations, checkpointed workflows and authoritative application records. Claude uses Pi's Anthropic provider; speech uses a separate Sarvam adapter. UI styling remains deferred.
+Native SwiftUI iPhone client for English and Tamil, with one TypeScript Pi Durable backend. Choose a language on first launch or change it under My Farm → Language and audio. Pi owns conversations, checkpointed workflows and authoritative application records. Claude uses Pi's Anthropic provider; speech uses a separate Sarvam adapter. UI styling remains deferred.
 
 Implementation and verification limits are recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). Product scope remains in [PRD.md](PRD.md) and [PRODUCT_SPECIFICATIONS.md](PRODUCT_SPECIFICATIONS.md); HTTP interfaces are in [API_CONTRACT.md](API_CONTRACT.md).
 
@@ -41,14 +41,14 @@ A `synthetic-demo` session was provisioned for this implementation's simulator c
 
 ```mermaid
 flowchart TD
-  App[SwiftUI: Tamil voice and Today] --> API[Authenticated HTTP and filtered SSE]
+  App[SwiftUI: English and Tamil voice and Today] --> API[Authenticated HTTP and filtered SSE]
   API --> Pi[Pi Durable 1.5.2]
   Pi --> Claude[Pi Anthropic provider]
   Pi --> Specialists[Bounded weather / crop / market / opportunity conversations]
   Specialists --> Sources[Deterministic adapters and reviewed catalogue]
   Pi --> State[Typed farm / evidence / decisions / learning documents]
   State --> SQLite[SQLite WAL synchronous FULL]
-  Pi --> Speech[Sarvam Tamil STT / TTS]
+  Pi --> Speech[Sarvam English and Tamil STT / TTS]
   Speech --> Audio[Private atomic audio files]
   Pi --> Delivery[Durable timers and notification outbox]
   Delivery --> App
@@ -71,7 +71,7 @@ Private audio is written, fsynced and atomically renamed before a durable media 
 - Open-Meteo: real forecast adapter, explicit requested/grid coordinates, dates, units and modelled provenance. Public snapshots can be reused until their six-hour refresh limit. No private farm facts enter that shared cache. ET0 never becomes an irrigation quantity automatically.
 - CEDA: real documented authenticated endpoint. Configure `CEDA_API_KEY` and reviewed commodity/location ID mappings in `FARM_MARKET_MAPPINGS_FILE`. The documented response omits units; unknown units remain explicitly non-comparable. Dated observations are not offers or price forecasts.
 - Crop guidance/opportunities: install an operator-reviewed JSON catalogue using `ReviewedRecord` in `backend/src/adapters.ts`. Only current official-source records with named review, matching crop/place/season and validity pass. No KCC corpus or reviewed current scheme catalogue is bundled. Missing access/coverage produces a clarification, not invented advice.
-- Sarvam: Tamil short-message STT (`saaras:v4`) and TTS (`bulbul:v3`), isolated provider adapters. The client caps recording at29seconds, supports preview/discard, and obtains audio-upload consent. Native comprehension/dialect validation is still required. Server size/type limits do not establish the duration of arbitrary third-party uploads; the speech service can reject unsupported recordings.
+- Sarvam: Tamil and Indian English short-message STT (`saaras:v4`) and TTS (`bulbul:v3`), isolated provider adapters. The client caps recording at29seconds, supports preview/discard, and obtains audio-upload consent. Native comprehension/dialect validation is still required. Server size/type limits do not establish the duration of arbitrary third-party uploads; the speech service can reject unsupported recordings.
 - Reminders: persisted intent, exact context/version, opt-in, quiet-hours and expiry checks at wake. Ambiguous dispatch becomes `uncertain`, without automatic resend. Enabled daily updates are durably scheduled for09:00 Asia/Kolkata; the Mac must be awake and the service running. Disabled preferences cancel future delivery. In-app outbox acceptance is not device receipt.
 - The native notification test is visibly labelled as a local Simulator test. **Production APNs/WhatsApp delivery is not integrated.** SSE reconnects while the app is active; it is not a background push service.
 
@@ -115,4 +115,4 @@ npm test
 
 Tests use explicitly labelled synthetic providers in `test/` only. They exercise real Pi generation/tools/compaction and SQLite, process-kill recovery, one-writer behavior, auth/isolation, duplicate/retry handling, stale approvals, corrections, scheme expiry, uncertain dispatch, playbook review, actual backup/restore and incompatible extension recovery. Loopback HTTP tests need permission to bind a local test socket in a restricted runner.
 
-`npm run evaluate:live -- --run` is an explicit credential-dependent evaluation path; see its help. Default profiles are synthetic. Actual event profiles, consented Tamil recordings, source-fidelity review and native-speaker/farmer comprehension remain necessary before calling the complete journey accepted. Technical execution does not automatically pass agricultural or language review.
+See [the simulator checklist](IMPLEMENTATION_STATUS.md) for the live voice run and its limits. The five test profiles are synthetic. Actual event profiles and farmer comprehension still require separate validation.

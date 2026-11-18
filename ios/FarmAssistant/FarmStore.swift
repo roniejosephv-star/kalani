@@ -24,6 +24,9 @@ struct MessageDraft: Codable {
     var audioConsent = false
     var selectedTab = 0
     var selectedTaskID: String?
+    var locale = UserDefaults.standard.string(forKey: "farmLanguage") ?? "ta-IN"
+    var languageChosen = UserDefaults.standard.string(forKey: "farmLanguage") != nil || UserDefaults.standard.bool(forKey: "selectedTamil")
+    private(set) var pendingLanguage = UserDefaults.standard.string(forKey: "pendingFarmLanguage")
     private var acceptedSequence = -1
     init() {
         #if DEBUG
@@ -40,7 +43,7 @@ struct MessageDraft: Codable {
                 }
                 #endif
             }
-            catch { self.error = "சோதனை இணைப்பை அமைக்க முடியவில்லை. Keychain: \((error as NSError).code)" }
+            catch { self.error = localized("சோதனை இணைப்பை அமைக்க முடியவில்லை.", "Could not set up the test connection.") }
         }
         #endif
     }
@@ -55,14 +58,41 @@ struct MessageDraft: Codable {
     }
     var recordingURL: URL { localDirectory.appendingPathComponent("draft.m4a") }
     var needsOnboarding: Bool { state?.facts["crop"] == nil || state?.facts["village"] == nil }
+    func localized(_ tamil: String, _ english: String) -> String { locale == "en-IN" ? english : tamil }
+    func chooseInitialLanguage(_ choice: String) {
+        pendingLanguage = choice
+        UserDefaults.standard.set(choice, forKey: "pendingFarmLanguage")
+        rememberLanguage(choice)
+    }
+    func setLanguage(_ choice: String) async {
+        guard ["ta-IN", "en-IN"].contains(choice), state != nil else { return }
+        if await mutate("/v1/preferences", method: "PATCH", body: ["requestId": UUID().uuidString, "locale": choice]) {
+            clearPendingLanguage()
+            rememberLanguage(choice)
+        }
+    }
+    private func clearPendingLanguage() {
+        pendingLanguage = nil
+        UserDefaults.standard.removeObject(forKey: "pendingFarmLanguage")
+    }
+    private func rememberLanguage(_ choice: String) {
+        locale = choice == "en-IN" ? choice : "ta-IN"
+        languageChosen = true
+        UserDefaults.standard.set(locale, forKey: "farmLanguage")
+    }
     func configure(url: String, token: String) throws {
         guard let parsed = URL(string: url), parsed.user == nil, parsed.password == nil,
               parsed.scheme == "https" || (parsed.scheme == "http" && ["127.0.0.1", "localhost", "::1"].contains(parsed.host ?? "")) else {
             throw APIError(status: 400, code: "HTTPS_OR_LOCALHOST_REQUIRED", message: "")
         }
-        try SessionKeychain.save(token.trimmingCharacters(in: .whitespacesAndNewlines))
-        self.baseURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.token = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        let nextURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        let nextToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        try SessionKeychain.save(nextToken)
+        if !self.token.isEmpty && (self.token != nextToken || baseURL != nextURL) {
+            clearPendingLanguage()
+        }
+        self.baseURL = nextURL
+        self.token = nextToken
         UserDefaults.standard.set(self.baseURL, forKey: "serverURL")
         state = nil
         acceptedSequence = -1
@@ -75,6 +105,7 @@ struct MessageDraft: Codable {
         while !Task.isCancelled {
             do {
                 await refresh()
+                if let pendingLanguage { await setLanguage(pendingLanguage) }
                 try await client.events(after: state?.sequence ?? 0) { [weak self] in await self?.refresh() }
             } catch is CancellationError { return }
             catch {
@@ -96,6 +127,9 @@ struct MessageDraft: Codable {
             if updated.sequence >= acceptedSequence {
                 acceptedSequence = updated.sequence
                 state = updated
+                if languageChosen && pendingLanguage == nil && locale != updated.preferences.locale {
+                    rememberLanguage(updated.preferences.locale)
+                }
             }
             connected = true
         } catch {
@@ -134,14 +168,14 @@ struct MessageDraft: Codable {
             guard identity == sessionID else { return false }
             if (error as? APIError)?.status == 409 {
                 await refresh()
-                self.error = "பண்ணை விவரங்கள் மாறியுள்ளன. புதிய தகவலுடன் ஒரு புதிய கேள்வியை அனுப்பவும்."
+                self.error = localized("பண்ணை விவரங்கள் மாறியுள்ளன. புதிய தகவலுடன் ஒரு புதிய கேள்வியை அனுப்பவும்.", "The farm details changed. Send a new question with the updated details.")
             } else { self.error = message(for: error) }
             return false
         }
     }
     func sendDraft() async -> Bool {
-        guard let client, let state, !busy, !draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.hasAudio else { return false }
-        if draft.hasAudio && !audioConsent { error = "ஒலியை அனுப்ப முன் உங்கள் அனுமதி தேவை."; return false }
+        guard let client, let state, pendingLanguage == nil, !busy, !draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.hasAudio else { return false }
+        if draft.hasAudio && !audioConsent { error = localized("ஒலியை அனுப்ப முன் உங்கள் அனுமதி தேவை.", "Please allow audio processing before sending a recording."); return false }
         let identity = sessionID
         busy = true
         draft.attempted = true
@@ -178,7 +212,7 @@ struct MessageDraft: Codable {
             try prepareDirectory()
             try JSONEncoder().encode(draft).write(to: localDirectory.appendingPathComponent("draft.json"), options: [.atomic, .completeFileProtection])
             try Data((audioConsent ? "yes" : "no").utf8).write(to: localDirectory.appendingPathComponent("audio-consent"), options: [.atomic, .completeFileProtection])
-        } catch { self.error = "வரைவைச் சேமிக்க முடியவில்லை. பயன்பாட்டை மூடுவதற்கு முன் மீண்டும் முயற்சிக்கவும்." }
+        } catch { self.error = localized("வரைவைச் சேமிக்க முடியவில்லை. பயன்பாட்டை மூடுவதற்கு முன் மீண்டும் முயற்சிக்கவும்.", "Could not save your draft. Try again before closing the app.") }
     }
     func prepareDirectory() throws {
         try FileManager.default.createDirectory(at: localDirectory, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.complete])
@@ -194,6 +228,7 @@ struct MessageDraft: Codable {
     }
     func clearSession() {
         try? SessionKeychain.save("")
+        clearPendingLanguage()
         state = nil
         token = ""
         draft = MessageDraft()
@@ -201,7 +236,14 @@ struct MessageDraft: Codable {
         sessionID = UUID()
     }
     func message(for error: Error) -> String {
-        if let error = error as? APIError { return error.localizedDescription }
-        return "இணைக்க முடியவில்லை. இணையம் மற்றும் சேவை இணைப்பைச் சரிபார்க்கவும். உங்கள் வரைவு பாதுகாக்கப்பட்டுள்ளது."
+        if let error = error as? APIError {
+            switch error.status {
+            case 401, 403: return localized("இணைப்பு அனுமதியைச் சரிபார்க்கவும். மீண்டும் இணைக்கவும்.", "Check your farm connection code and reconnect.")
+            case 409: return localized("விவரங்கள் மாறியுள்ளன. புதிய விவரங்களைப் பார்த்து மீண்டும் உறுதி செய்யவும்.", "Details have changed. Review the latest details and confirm again.")
+            case 503: return localized("சேவை இப்போது கிடைக்கவில்லை. உங்கள் செய்தியை மீண்டும் முயற்சிக்கலாம்.", "The service is unavailable. You can retry your message.")
+            default: return serviceError(error.code)
+            }
+        }
+        return localized("இணைக்க முடியவில்லை. இணையம் மற்றும் சேவை இணைப்பைச் சரிபார்க்கவும். உங்கள் வரைவு பாதுகாக்கப்பட்டுள்ளது.", "Could not connect. Check the connection and try again. Your draft is saved.")
     }
 }

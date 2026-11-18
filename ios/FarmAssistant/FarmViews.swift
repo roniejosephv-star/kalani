@@ -19,42 +19,42 @@ struct FarmFactsView: View {
     var body: some View {
         Form {
             Section {
-                Text(onboarding ? "உங்கள் வயலைப் பற்றி இரண்டு விவரங்கள்" : "விவரங்களைத் திருத்தவும்").font(.headline)
-                Text("தெரிந்தவற்றை மட்டும் சொல்லுங்கள். பின்னர் மாற்றலாம்.")
+                Text(onboarding ? store.localized("உங்கள் வயலைப் பற்றி இரண்டு விவரங்கள்", "Two details about your farm") : store.localized("விவரங்களைத் திருத்தவும்", "Edit farm details")).font(.headline)
+                Text(store.localized("தெரிந்தவற்றை மட்டும் சொல்லுங்கள். பின்னர் மாற்றலாம்.", "Share what you know. You can change it later."))
             }
             if onboarding {
-                Section("பேசித் தொடங்கலாம்") {
-                    Button { composer = ComposerSheet() } label: { Label("உங்கள் பண்ணையைப் பற்றிச் சொல்லுங்கள்", systemImage: "mic.fill") }
+                Section(store.localized("பேசித் தொடங்கலாம்", "Start by speaking")) {
+                    Button { composer = ComposerSheet() } label: { Label(store.localized("உங்கள் பண்ணையைப் பற்றிச் சொல்லுங்கள்", "Tell us about your farm"), systemImage: "mic.fill") }
                     if let message = store.state?.messages.last(where: { $0.role == "assistant" && $0.status != "superseded" }) {
                         MessageCard(message: message)
                         if let facts = message.proposedFacts, !facts.isEmpty {
-                            Button("நான் சொன்ன விவரங்களைச் சரிபார்க்கவும்") { applySuggestedFacts(facts) }
+                            Button(store.localized("நான் சொன்ன விவரங்களைச் சரிபார்க்கவும்", "Review the details I shared")) { applySuggestedFacts(facts) }
                         }
                     }
-                    Text("வழிகாட்டியின் பதிலைப் பார்த்து, கீழே உள்ள விவரங்களை உறுதி செய்யவும்.").font(.caption).foregroundStyle(.secondary)
+                    Text(store.localized("வழிகாட்டியின் பதிலைப் பார்த்து, கீழே உள்ள விவரங்களை உறுதி செய்யவும்.", "Review the reply and confirm your details below.")).font(.caption).foregroundStyle(.secondary)
                 }
             }
             Section {
-                TextField("உங்கள் வயல் எந்த ஊரில் இருக்கிறது?", text: locationField($village)).accessibilityIdentifier("village")
-                TextField("இப்போது என்ன பயிர் சாகுபடி செய்கிறீர்கள்?", text: $crop).accessibilityIdentifier("crop")
-                TextField("மாவட்டம் (தெரிந்தால்)", text: locationField($district)).accessibilityIdentifier("district")
+                TextField(store.localized("உங்கள் வயல் எந்த ஊரில் இருக்கிறது?", "Which village is your farm in?"), text: locationField($village)).accessibilityIdentifier("village")
+                TextField(store.localized("இப்போது என்ன பயிர் சாகுபடி செய்கிறீர்கள்?", "What crop are you growing now?"), text: $crop).accessibilityIdentifier("crop")
+                TextField(store.localized("மாவட்டம் (தெரிந்தால்)", "District (if known)"), text: locationField($district)).accessibilityIdentifier("district")
             }
             Section {
-                DisclosureGroup("கூடுதல் விவரங்கள் (விருப்பம்)") {
-                    TextField("மண் வகை", text: $soil)
-                    TextField("நீர் / பாசன முறை", text: $irrigation)
-                    TextField("வயலின் அட்சரேகை · Latitude", text: $latitude).keyboardType(.numbersAndPunctuation).accessibilityIdentifier("latitude")
-                    TextField("வயலின் தீர்க்கரேகை · Longitude", text: $longitude).keyboardType(.numbersAndPunctuation).accessibilityIdentifier("longitude")
-                    Text("இடம் சரியாக உறுதி செய்யப்பட்ட பின்னரே உள்ளூர் வானிலை கிடைக்கும். தெரியாத இட எண்ணை ஊகிக்க வேண்டாம்.").font(.caption).foregroundStyle(.secondary)
+                DisclosureGroup(store.localized("கூடுதல் விவரங்கள் (விருப்பம்)", "More details (optional)")) {
+                    TextField(store.localized("மண் வகை", "Soil type"), text: $soil)
+                    TextField(store.localized("நீர் / பாசன முறை", "Irrigation method"), text: $irrigation)
+                    TextField(store.localized("வயலின் அட்சரேகை · Latitude", "Farm latitude"), text: $latitude).keyboardType(.numbersAndPunctuation).accessibilityIdentifier("latitude")
+                    TextField(store.localized("வயலின் தீர்க்கரேகை · Longitude", "Farm longitude"), text: $longitude).keyboardType(.numbersAndPunctuation).accessibilityIdentifier("longitude")
+                    Text(store.localized("இடம் சரியாக உறுதி செய்யப்பட்ட பின்னரே உள்ளூர் வானிலை கிடைக்கும். தெரியாத இட எண்ணை ஊகிக்க வேண்டாம்.", "Local weather needs confirmed coordinates. Leave them blank if you don't know them.")).font(.caption).foregroundStyle(.secondary)
                 }
             }
             Section {
-                Button("விவரங்களைச் சரிபார்க்கவும்") { prepareConfirmation() }
+                Button(store.localized("விவரங்களைச் சரிபார்க்கவும்", "Review details")) { prepareConfirmation() }
                     .disabled(village.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || crop.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.busy)
                     .accessibilityIdentifier("reviewFacts")
             }
         }
-        .navigationTitle(onboarding ? "உங்கள் பண்ணை" : "திருத்தம்")
+        .navigationTitle(onboarding ? store.localized("உங்கள் பண்ணை", "Your farm") : store.localized("திருத்தம்", "Edit"))
         .task {
             guard !loaded, let state = store.state else { return }
             loaded = true
@@ -71,12 +71,12 @@ struct FarmFactsView: View {
         .sheet(item: $confirmation) { confirmation in
             NavigationStack {
                 Form {
-                    Section("நான் புரிந்துகொண்டது") {
+                    Section(store.localized("நான் புரிந்துகொண்டது", "What I understood")) {
                         ForEach(confirmation.rows, id: \.0) { row in LabeledContent(row.0, value: row.1) }
                     }
                     Section {
-                        Text("இந்த விவரங்கள் மாறினால் பழைய வழிகாட்டலையும் வரவிருக்கும் நினைவூட்டல்களையும் மீண்டும் பரிசீலிப்போம். செய்த வேலைகளின் பதிவு தொடரும்.")
-                        Button("விவரங்கள் சரி") {
+                        Text(store.localized("இந்த விவரங்கள் மாறினால் பழைய வழிகாட்டலையும் வரவிருக்கும் நினைவூட்டல்களையும் மீண்டும் பரிசீலிப்போம். செய்த வேலைகளின் பதிவு தொடரும்.", "Changing these details means we'll review earlier guidance and upcoming reminders. Completed work stays in your record."))
+                        Button(store.localized("விவரங்கள் சரி", "Confirm details")) {
                             Task {
                                 var body = confirmation.body
                                 body["requestId"] = confirmation.id.uuidString
@@ -89,9 +89,9 @@ struct FarmFactsView: View {
                                 }
                             }
                         }.disabled(store.busy).accessibilityIdentifier("confirmFacts")
-                        Button("திருத்த வேண்டும்") { self.confirmation = nil }
+                        Button(store.localized("திருத்த வேண்டும்", "Make a correction")) { self.confirmation = nil }
                     }
-                }.navigationTitle("உறுதி செய்யவும்")
+                }.navigationTitle(store.localized("உறுதி செய்யவும்", "Confirm"))
             }
         }
     }
@@ -112,7 +112,7 @@ struct FarmFactsView: View {
         if let value = facts["irrigation"] { irrigation = value.text }
         expectedVersion = store.state?.version ?? expectedVersion
         guard !village.isEmpty, !crop.isEmpty else {
-            store.error = "ஊர் மற்றும் பயிர் விவரத்தை இன்னும் உறுதி செய்ய வேண்டும். விடுபட்ட விவரத்தை கீழே சேர்க்கலாம் அல்லது மீண்டும் பேசலாம்."
+            store.error = store.localized("ஊர் மற்றும் பயிர் விவரத்தை இன்னும் உறுதி செய்ய வேண்டும். விடுபட்ட விவரத்தை கீழே சேர்க்கலாம் அல்லது மீண்டும் பேசலாம்.", "Confirm your village and crop. Enter missing details below or speak again.")
             return
         }
         prepareConfirmation()
@@ -121,26 +121,26 @@ struct FarmFactsView: View {
         guard let state = store.state else { return }
         if expectedVersion != state.version {
             expectedVersion = state.version
-            store.error = "புதிய தகவல் வந்துள்ளது. நீங்கள் உள்ளிட்ட விவரங்களை மீண்டும் பார்த்து உறுதி செய்யவும்."
+            store.error = store.localized("புதிய தகவல் வந்துள்ளது. நீங்கள் உள்ளிட்ட விவரங்களை மீண்டும் பார்த்து உறுதி செய்யவும்.", "New information arrived. Review and confirm the details you entered.")
             return
         }
         var facts: [String: Any] = [:]
         var rows: [(String, String)] = []
-        for (key, label, value) in [("village", "ஊர்", village), ("crop", "பயிர்", crop), ("district", "மாவட்டம்", district), ("soil", "மண்", soil), ("irrigation", "பாசனம்", irrigation)] {
+        for (key, label, value) in [("village", store.localized("ஊர்", "Village"), village), ("crop", store.localized("பயிர்", "Crop"), crop), ("district", store.localized("மாவட்டம்", "District"), district), ("soil", store.localized("மண்", "Soil"), soil), ("irrigation", store.localized("பாசனம்", "Irrigation"), irrigation)] {
             let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
             if !value.isEmpty { facts[key] = value; rows.append((label, value)) }
             else if key == "district", let previous = state.facts[key]?.text, !previous.isEmpty {
                 facts[key] = ""
-                rows.append((label, "நீக்கப்படும்"))
+                rows.append((label, store.localized("நீக்கப்படும்", "Will be removed")))
             }
         }
         if !latitude.isEmpty || !longitude.isEmpty {
             guard let lat = Double(latitude), let lon = Double(longitude), (-90...90).contains(lat), (-180...180).contains(lon) else {
-                store.error = "இட எண்கள் சரியாக இல்லை. இரண்டையும் சரிபார்க்கவும் அல்லது இரண்டையும் காலியாக விடவும்."
+                store.error = store.localized("இட எண்கள் சரியாக இல்லை. இரண்டையும் சரிபார்க்கவும் அல்லது இரண்டையும் காலியாக விடவும்.", "Check both coordinates or leave them both blank.")
                 return
             }
             facts["latitude"] = lat; facts["longitude"] = lon
-            rows.append(("இடம்", "\(lat), \(lon)"))
+            rows.append((store.localized("இடம்", "Location"), "\(lat), \(lon)"))
         }
         confirmation = FactConfirmation(rows: rows, body: ["expectedVersion": expectedVersion, "facts": facts, "fieldId": state.fieldId, "cycleId": state.cycleId])
     }
@@ -154,114 +154,123 @@ struct WeekView: View {
     var body: some View {
         ScrollViewReader { proxy in
             List {
-                if store.state?.tasks.isEmpty != false { Text("இன்னும் வேலைத் திட்டம் இல்லை. உங்கள் கவலையைச் சொல்லுங்கள்; ஆதாரங்களுடன் திட்டத்தை உருவாக்குவோம்.") }
+                if store.state?.tasks.isEmpty != false { Text(store.localized("இன்னும் வேலைத் திட்டம் இல்லை. உங்கள் கவலையைச் சொல்லுங்கள்; ஆதாரங்களுடன் திட்டத்தை உருவாக்குவோம்.", "No tasks yet. Tell us what you need help with and we'll build a plan using available sources.")) }
                 ForEach(store.state?.tasks ?? []) { task in
                     Section {
                         VStack(alignment: .leading, spacing: 10) {
                             Text(task.title).font(.headline)
-                            Text(displayDate(task.dueAt)).font(.caption).foregroundStyle(.secondary)
+                            Text(store.dateLabel(task.dueAt)).font(.caption).foregroundStyle(.secondary)
                             Text(task.reason)
-                            Text(tamilStatus(task.status)).font(.subheadline.bold())
+                            Text(store.statusLabel(task.status)).font(.subheadline.bold())
                             ForEach(task.uncertainty, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
                             EvidenceList(ids: task.evidenceIds)
                             if task.status == "proposed" {
-                                Button("செய்ய ஒப்புக்கொள்கிறேன்") { decision = TaskDecision(task: task, decision: "approved", label: "செய்ய ஒப்புக்கொள்கிறேன்") }
+                                Button(store.localized("செய்ய ஒப்புக்கொள்கிறேன்", "Approve task")) { decision = TaskDecision(task: task, decision: "approved", label: store.localized("செய்ய ஒப்புக்கொள்கிறேன்", "Approve task")) }
                             }
                             if task.status == "postponed" {
-                                Text("புதிய தகவலுடன் திட்டத்தை மீண்டும் கேளுங்கள். பழைய ஒப்புதலை மீண்டும் பயன்படுத்த முடியாது.").font(.caption).foregroundStyle(.secondary)
+                                Text(store.localized("புதிய தகவலுடன் திட்டத்தை மீண்டும் கேளுங்கள். பழைய ஒப்புதலை மீண்டும் பயன்படுத்த முடியாது.", "Ask for a new plan with the latest details. Earlier approval can't be reused.")).font(.caption).foregroundStyle(.secondary)
                             }
                             if ["proposed", "approved", "postponed"].contains(task.status) {
-                                Button("செய்துவிட்டேன்") { decision = TaskDecision(task: task, decision: "completed", label: "செய்துவிட்டேன்") }
-                                Button("பிறகு செய்யலாம்") { decision = TaskDecision(task: task, decision: "postponed", label: "பிறகு செய்யலாம்") }
-                                Button("வேண்டாம்", role: .destructive) { decision = TaskDecision(task: task, decision: "rejected", label: "வேண்டாம்") }
+                                Button(store.localized("செய்துவிட்டேன்", "Mark as done")) { decision = TaskDecision(task: task, decision: "completed", label: store.localized("செய்துவிட்டேன்", "Mark as done")) }
+                                Button(store.localized("பிறகு செய்யலாம்", "Postpone")) { decision = TaskDecision(task: task, decision: "postponed", label: store.localized("பிறகு செய்யலாம்", "Postpone")) }
+                                Button(store.localized("வேண்டாம்", "Decline"), role: .destructive) { decision = TaskDecision(task: task, decision: "rejected", label: store.localized("வேண்டாம்", "Decline")) }
                             }
                         }.padding(.vertical, 6)
                     }.id(task.id)
                 }
                 if let notifications = store.state?.notifications, !notifications.isEmpty {
-                    Section("நினைவூட்டல்கள்") {
+                    Section(store.localized("நினைவூட்டல்கள்", "Reminders")) {
                         ForEach(notifications) { notification in
                             VStack(alignment: .leading) {
                                 Text(notification.title)
-                                Text(displayDate(notification.dueAt)).font(.caption).foregroundStyle(.secondary)
-                                Text(tamilStatus(notification.status)).font(.caption)
+                                Text(store.dateLabel(notification.dueAt)).font(.caption).foregroundStyle(.secondary)
+                                Text(store.statusLabel(notification.status)).font(.caption)
                             }
                         }
                     }
                 }
             }.onChange(of: store.selectedTaskID) { _, id in if let id { proxy.scrollTo(id, anchor: .top) } }
         }
-        .navigationTitle("இந்த வாரம்")
+        .navigationTitle(store.localized("இந்த வாரம்", "This week"))
         .refreshable { await store.refresh() }
         .sheet(item: $decision) { selection in
             NavigationStack {
                 Form {
                     Text(selection.task.title).font(.headline)
                     Text(selection.task.reason)
-                    Text(selection.decision == "completed" ? "நீங்கள் செய்ததாக மட்டும் பதிவு செய்கிறோம். இது பழைய ஒப்புதலாக மாற்றப்படாது." : "இந்த வேலைக்கும் இந்தப் பதிப்புக்கும் மட்டும் உங்கள் முடிவைப் பதிவு செய்கிறோம். வெளியே எந்தச் செயலும் தானாக நடைபெறாது.")
+                    Text(selection.decision == "completed" ? store.localized("நீங்கள் செய்ததாக மட்டும் பதிவு செய்கிறோம். இது பழைய ஒப்புதலாக மாற்றப்படாது.", "This records that you did the task. It doesn't change any earlier approval.") : store.localized("இந்த வேலைக்கும் இந்தப் பதிப்புக்கும் மட்டும் உங்கள் முடிவைப் பதிவு செய்கிறோம். வெளியே எந்தச் செயலும் தானாக நடைபெறாது.", "This decision applies to this version of the task. No work is done automatically."))
                     Button(selection.label) {
                         Task {
                             if await store.mutate("/v1/tasks/\(selection.task.id)/decisions", body: ["requestId": selection.id.uuidString, "version": selection.task.version, "decision": selection.decision]) { decision = nil }
                         }
                     }.disabled(store.busy)
-                    Button("மீண்டும் பார்க்கவும்") { decision = nil }
-                }.navigationTitle("உங்கள் முடிவு")
+                    Button(store.localized("மீண்டும் பார்க்கவும்", "Go back")) { decision = nil }
+                }.navigationTitle(store.localized("உங்கள் முடிவு", "Your decision"))
             }
         }
     }
 }
 
 struct MyFarmView: View {
+    private enum NotificationResult { case denied, scheduled, failed }
     @Environment(FarmStore.self) private var store
     @State private var exportURL: URL?
     @State private var confirmDelete = false
-    @State private var notificationMessage: String?
+    @State private var notificationResult: NotificationResult?
     var body: some View {
         Form {
-            Section("பண்ணை விவரங்கள்") {
+            Section(store.localized("பண்ணை விவரங்கள்", "Farm details")) {
                 ForEach((store.state?.facts.keys.sorted() ?? []), id: \.self) { key in
                     LabeledContent(factLabel(key), value: store.state?.facts[key]?.text ?? "")
                 }
-                NavigationLink("விவரங்களைத் திருத்தவும்") { FarmFactsView(onboarding: false) }
+                NavigationLink(store.localized("விவரங்களைத் திருத்தவும்", "Edit farm details")) { FarmFactsView(onboarding: false) }
             }
-            Section("மொழி மற்றும் ஒலி") {
-                Text("தமிழ்")
-                Text("உள்ளூர் சொற்களைப் புரிந்துகொள்ள முயற்சிப்போம். புரியாதவற்றைக் கேட்டு உறுதி செய்வோம்.").font(.caption).foregroundStyle(.secondary)
-                Toggle("ஒலியைச் செயலாக்க அனுமதி", isOn: Binding(get: { store.audioConsent }, set: { store.audioConsent = $0; store.saveDraft() }))
+            Section(store.localized("மொழி மற்றும் ஒலி", "Language and audio")) {
+                Picker(store.localized("மொழி", "Language"), selection: Binding(get: { store.locale }, set: { locale in
+                    Task { await store.setLanguage(locale) }
+                })) {
+                    Text("தமிழ்").tag("ta-IN")
+                    Text("English").tag("en-IN")
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("languagePreference")
+                .disabled(store.busy)
+                Text(store.localized("உள்ளூர் சொற்களைப் புரிந்துகொள்ள முயற்சிப்போம். புரியாதவற்றைக் கேட்டு உறுதி செய்வோம்.", "If we're unsure about a local term, we'll ask you to clarify.")).font(.caption).foregroundStyle(.secondary)
+                Toggle(store.localized("ஒலியைச் செயலாக்க அனுமதி", "Allow audio processing"), isOn: Binding(get: { store.audioConsent }, set: { store.audioConsent = $0; store.saveDraft() }))
             }
-            Section("அறிவிப்புகள்") {
-                Toggle("நினைவூட்டல்கள் வேண்டும்", isOn: Binding(get: { store.state?.preferences.notifications ?? false }, set: { enabled in
+            Section(store.localized("அறிவிப்புகள்", "Notifications")) {
+                Toggle(store.localized("நினைவூட்டல்கள் வேண்டும்", "Enable reminders"), isOn: Binding(get: { store.state?.preferences.notifications ?? false }, set: { enabled in
                     Task { _ = await store.mutate("/v1/preferences", method: "PATCH", body: ["requestId": UUID().uuidString, "notifications": enabled]) }
                 })).disabled(store.busy)
                 if let preference = store.state?.preferences {
-                    Picker("அமைதி தொடங்கும் நேரம்", selection: Binding(get: { preference.quietStart }, set: { hour in
+                    Picker(store.localized("அமைதி தொடங்கும் நேரம்", "Quiet hours start"), selection: Binding(get: { preference.quietStart }, set: { hour in
                         Task { _ = await store.mutate("/v1/preferences", method: "PATCH", body: ["requestId": UUID().uuidString, "quietStart": hour]) }
                     })) { ForEach(0..<24) { Text(String(format: "%02d:00", $0)).tag($0) } }.disabled(store.busy)
-                    Picker("அமைதி முடியும் நேரம்", selection: Binding(get: { preference.quietEnd }, set: { hour in
+                    Picker(store.localized("அமைதி முடியும் நேரம்", "Quiet hours end"), selection: Binding(get: { preference.quietEnd }, set: { hour in
                         Task { _ = await store.mutate("/v1/preferences", method: "PATCH", body: ["requestId": UUID().uuidString, "quietEnd": hour]) }
                     })) { ForEach(0..<24) { Text(String(format: "%02d:00", $0)).tag($0) } }.disabled(store.busy)
-                    Text("இந்திய நேரம்").font(.caption).foregroundStyle(.secondary)
+                    Text(store.localized("இந்திய நேரம்", "India time")).font(.caption).foregroundStyle(.secondary)
                 }
-                Button("சோதனை அறிவிப்பைப் பார்க்கவும்") {
+                Button(store.localized("சோதனை அறிவிப்பைப் பார்க்கவும்", "Try a test notification")) {
                     Task {
                         do {
                             let center = UNUserNotificationCenter.current()
-                            guard try await center.requestAuthorization(options: [.alert, .sound]) else { notificationMessage = "அறிவிப்பு அனுமதி இல்லை. அமைப்புகளில் மாற்றலாம்."; return }
+                            guard try await center.requestAuthorization(options: [.alert, .sound]) else { notificationResult = .denied; return }
                             let content = UNMutableNotificationContent()
-                            content.title = "சோதனை அறிவிப்பு"
-                            content.body = "இது Simulator-இன் உள்ளூர் சோதனை மட்டுமே. பண்ணைக்கான நேரடி அறிவிப்பு அல்ல."
+                            content.title = store.localized("சோதனை அறிவிப்பு", "Test notification")
+                            content.body = store.localized("இது Simulator-இன் உள்ளூர் சோதனை மட்டுமே. பண்ணைக்கான நேரடி அறிவிப்பு அல்ல.", "This is a local Simulator test, not a live farm notification.")
                             content.sound = .default
                             if let id = store.state?.tasks.first?.id { content.userInfo = ["taskId": id] }
                             try await center.add(UNNotificationRequest(identifier: "local-demo", content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)))
-                            notificationMessage = "5 நொடிகளில் சோதனை அறிவிப்பு வரும்."
-                        } catch { notificationMessage = "சோதனை அறிவிப்பை உருவாக்க முடியவில்லை." }
+                            notificationResult = .scheduled
+                        } catch { notificationResult = .failed }
                     }
                 }
-                if let notificationMessage { Text(notificationMessage).font(.caption) }
-                Text("இந்த demo-வில் தொலைபேசிக்கான நேரடி push சேவை இணைக்கப்படவில்லை.").font(.caption).foregroundStyle(.secondary)
+                if let notificationResult { Text(notificationMessage(notificationResult)).font(.caption) }
+                Text(store.localized("இந்த demo-வில் தொலைபேசிக்கான நேரடி push சேவை இணைக்கப்படவில்லை.", "This demo doesn't send live push notifications.")).font(.caption).foregroundStyle(.secondary)
             }
-            Section("உங்கள் தகவல்") {
-                Button("என் தகவலைப் பதிவிறக்கவும்") {
+            Section(store.localized("உங்கள் தகவல்", "Your data")) {
+                Button(store.localized("என் தகவலைப் பதிவிறக்கவும்", "Download my data")) {
                     Task {
                         do {
                             guard let client = store.client else { return }
@@ -272,18 +281,18 @@ struct MyFarmView: View {
                             let url = store.localDirectory.appendingPathComponent("farm-export.json")
                             try data.write(to: url, options: [.atomic, .completeFileProtection])
                             exportURL = url
-                        } catch { store.error = "தகவலைப் பதிவிறக்க முடியவில்லை." }
+                        } catch { store.error = store.localized("தகவலைப் பதிவிறக்க முடியவில்லை.", "Couldn't download your data.") }
                     }
                 }
-                if let exportURL { ShareLink("என் தகவலைச் சேமிக்கவும் / பகிரவும்", item: exportURL) }
-                Text("இந்தப் பதிவில் உங்கள் தனிப்பட்ட பண்ணைத் தகவல் இருக்கும். நம்பகமான இடத்தில் மட்டும் சேமிக்கவும்.").font(.caption).foregroundStyle(.secondary)
-                Button("என் தகவலை நீக்கவும்", role: .destructive) { confirmDelete = true }
-                Button("இந்தச் சாதனத்தின் இணைப்பை நீக்கவும்") { store.clearSession() }
+                if let exportURL { ShareLink(store.localized("என் தகவலைச் சேமிக்கவும் / பகிரவும்", "Save or share my data"), item: exportURL) }
+                Text(store.localized("இந்தப் பதிவில் உங்கள் தனிப்பட்ட பண்ணைத் தகவல் இருக்கும். நம்பகமான இடத்தில் மட்டும் சேமிக்கவும்.", "This file contains private farm data. Save it only somewhere you trust.")).font(.caption).foregroundStyle(.secondary)
+                Button(store.localized("என் தகவலை நீக்கவும்", "Delete my data"), role: .destructive) { confirmDelete = true }
+                Button(store.localized("இந்தச் சாதனத்தின் இணைப்பை நீக்கவும்", "Disconnect this device")) { store.clearSession() }
             }
         }
-        .navigationTitle("என் பண்ணை")
-        .confirmationDialog("சேவையிலுள்ள உங்கள் தகவலை நீக்க வேண்டுமா? காப்புப்பிரதிகளுக்கான தனி சேமிப்புக் கொள்கை பொருந்தும்.", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("நீக்கவும்", role: .destructive) {
+        .navigationTitle(store.localized("என் பண்ணை", "My farm"))
+        .confirmationDialog(store.localized("சேவையிலுள்ள உங்கள் தகவலை நீக்க வேண்டுமா? காப்புப்பிரதிகளுக்கான தனி சேமிப்புக் கொள்கை பொருந்தும்.", "Delete your data from the service? A separate retention policy applies to backups."), isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button(store.localized("நீக்கவும்", "Delete"), role: .destructive) {
                 Task {
                     let directory = store.localDirectory
                     if await store.mutate("/v1/account", method: "DELETE", body: ["requestId": UUID().uuidString, "confirmation": "DELETE"]) {
@@ -294,7 +303,29 @@ struct MyFarmView: View {
             }
         }
     }
+    private func notificationMessage(_ result: NotificationResult) -> String {
+        switch result {
+        case .denied: store.localized("அறிவிப்பு அனுமதி இல்லை. அமைப்புகளில் மாற்றலாம்.", "Notifications aren't allowed. You can change this in Settings.")
+        case .scheduled: store.localized("5 நொடிகளில் சோதனை அறிவிப்பு வரும்.", "The test notification will arrive in 5 seconds.")
+        case .failed: store.localized("சோதனை அறிவிப்பை உருவாக்க முடியவில்லை.", "Couldn't schedule a test notification.")
+        }
+    }
     private func factLabel(_ key: String) -> String {
-        ["village": "ஊர்", "crop": "பயிர்", "district": "மாவட்டம்", "soil": "மண்", "irrigation": "பாசனம்", "latitude": "அட்சரேகை", "longitude": "தீர்க்கரேகை", "sowingDate": "விதைத்த தேதி"][key] ?? key
+        switch key {
+        case "village": store.localized("ஊர்", "Village")
+        case "crop": store.localized("பயிர்", "Crop")
+        case "district": store.localized("மாவட்டம்", "District")
+        case "state": store.localized("மாநிலம்", "State")
+        case "season": store.localized("பருவம்", "Season")
+        case "soil": store.localized("மண்", "Soil")
+        case "irrigation": store.localized("பாசனம்", "Irrigation")
+        case "latitude": store.localized("அட்சரேகை", "Latitude")
+        case "longitude": store.localized("தீர்க்கரேகை", "Longitude")
+        case "sowingDate": store.localized("விதைத்த தேதி", "Sowing date")
+        case "transplantDate": store.localized("நடவு செய்த தேதி", "Transplant date")
+        case "datePrecision": store.localized("தேதியின் துல்லியம்", "Date precision")
+        case "concern": store.localized("கவலை", "Concern")
+        default: key
+        }
     }
 }

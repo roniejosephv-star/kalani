@@ -37,7 +37,11 @@ test('HTTP authentication, owner boundaries, conflicts, input validation and rec
   assert.equal((await request(`/v1/audio/${audioId}`,{},tokenB)).status,404);
   assert.deepEqual(Buffer.from(await (await request(`/v1/audio/${audioId}`)).arrayBuffer()),recording);
   const cursor=(await runtime.state(owner)).sequence;
-  await runtime.preferences(owner,{requestId:'http-preferences-event',quietStart:21});
+  const patch=(requestId:string,locale:string)=>request('/v1/preferences',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId,locale,quietStart:21})});
+  const english=await patch('http-preferences-event','en-IN');assert.equal(english.status,200);assert.equal((await english.json()).preferences.locale,'en-IN');
+  assert.equal((await (await request('/v1/state')).json()).preferences.locale,'en-IN');
+  assert.equal((await (await request('/v1/state',{},tokenB)).json()).preferences.locale,'ta-IN');
+  const unsupported=await patch('http-preferences-unsupported','hi-IN');assert.equal(unsupported.status,400);assert.equal((await unsupported.json()).error.code,'unsupported_locale');
   const controller=new AbortController();
   const stream=await request('/v1/events',{headers:{'Last-Event-ID':String(cursor)},signal:controller.signal});assert.equal(stream.status,200);assert.match(stream.headers.get('content-type')??'',/text\/event-stream/);
   const reader=stream.body!.getReader();const chunk=await reader.read();const text=Buffer.from(chunk.value!).toString();

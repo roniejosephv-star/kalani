@@ -68,23 +68,18 @@ struct FarmNotification: Decodable, Identifiable {
 }
 struct MessageReceipt: Decodable { let messageId: String }
 struct AudioReceipt: Decodable { let audioId: String }
-struct APIError: Error, LocalizedError {
+struct APIError: Error {
     let status: Int
     let code: String
     let message: String
-    var errorDescription: String? {
-        switch status {
-        case 401, 403: return "இணைப்பு அனுமதியைச் சரிபார்க்கவும். மீண்டும் இணைக்கவும்."
-        case 409: return "விவரங்கள் மாறியுள்ளன. புதிய விவரங்களைப் பார்த்து மீண்டும் உறுதி செய்யவும்."
-        case 503: return "சேவை இப்போது கிடைக்கவில்லை. உங்கள் செய்தியை மீண்டும் முயற்சிக்கலாம்."
-        default: return tamilServiceError(code)
-        }
-    }
+
 }
 func tamilServiceError(_ code: String) -> String {
     switch code {
     case "claude_unconfigured", "model_unavailable":
         return "பதில் தயாரிக்கும் சேவை இப்போது கிடைக்கவில்லை. உங்கள் செய்தி சேமிக்கப்பட்டுள்ளது. பின்னர் மீண்டும் முயற்சிக்கலாம்."
+    case "transcription_unavailable":
+        return "ஒலிப்பதிவை எழுத்தாக மாற்ற முடியவில்லை. மீண்டும் முயற்சிக்கலாம் அல்லது கேள்வியை எழுதலாம்."
     case "audio_missing":
         return "உங்கள் ஒலிப்பதிவு கிடைக்கவில்லை. மீண்டும் பதிவு செய்து புதிய செய்தியாக அனுப்பவும்."
     case "invalid_model_output", "invalid_specialist_output":
@@ -117,14 +112,51 @@ func tamilStatus(_ status: String) -> String {
     default: return status
     }
 }
-func displayDate(_ value: String) -> String {
+func displayDate(_ value: String, locale: String) -> String {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     let date = formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
     guard let date else { return value }
     let output = DateFormatter()
-    output.locale = Locale(identifier: "ta_IN")
+    output.locale = Locale(identifier: locale)
     output.dateStyle = .medium
     output.timeStyle = .short
     return output.string(from: date)
+}
+
+@MainActor extension FarmStore {
+    func dateLabel(_ value: String) -> String { displayDate(value, locale: locale) }
+
+    func audioError(_ error: AudioController.AudioError) -> String {
+        switch error {
+        case .permission: return localized("மைக்ரோஃபோன் அனுமதி இல்லை. அமைப்புகளில் அனுமதிக்கலாம் அல்லது எழுதிப் பதில் சொல்லலாம்.", "Microphone access is off. Allow it in Settings or type your question.")
+        case .record: return localized("ஒலியைப் பதிவு செய்ய முடியவில்லை. மீண்டும் முயற்சிக்கவும்.", "Could not record audio. Try again.")
+        case .play: return localized("ஒலியை இயக்க முடியவில்லை. எழுத்துப் பதிலைப் பார்க்கலாம்.", "Could not play audio. You can read the reply.")
+        case .interrupted: return localized("பதிவு இடையில் நின்றுவிட்டது. கேட்டு சரிபார்த்து அனுப்பவும்.", "Recording was interrupted. Listen and check it before sending.")
+        }
+    }
+
+    func serviceError(_ code: String) -> String {
+        guard locale == "en-IN" else { return tamilServiceError(code) }
+        switch code {
+        case "claude_unconfigured", "model_unavailable": return "The reply service is unavailable. Your message is saved. Try again later."
+        case "transcription_unavailable": return "Could not transcribe the recording. Try again or type your question."
+        case "audio_missing": return "Your recording is unavailable. Record and send a new message."
+        case "invalid_model_output", "invalid_specialist_output": return "We could not verify the information, so guidance was not published. Try again."
+        case "busy": return "Earlier messages are still being processed. Please wait."
+        default: return "Could not finish processing. Try again later."
+        }
+    }
+
+    func statusLabel(_ status: String) -> String {
+        guard locale == "en-IN" else { return tamilStatus(status) }
+        return [
+            "queued": "Queued", "processing": "Preparing your reply", "ready": "Ready",
+            "failed": "Try again", "unconfigured": "Audio service is unavailable", "pending": "Preparing audio",
+            "proposed": "Awaiting your decision", "approved": "Approved", "completed": "Reported complete",
+            "postponed": "Postponed", "rejected": "Declined", "superseded": "Replaced by newer guidance",
+            "accepted": "Added to the app", "dispatching": "Sending", "uncertain": "Delivery needs checking",
+            "cancelled": "Cancelled", "expired": "Expired"
+        ][status] ?? status
+    }
 }

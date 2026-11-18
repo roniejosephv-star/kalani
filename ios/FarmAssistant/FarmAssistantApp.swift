@@ -43,41 +43,54 @@ final class NotificationDelegate: NSObject, UIApplicationDelegate, UNUserNotific
 
 struct RootView: View {
     @Environment(FarmStore.self) private var store
-    @AppStorage("selectedTamil") private var selectedTamil = false
     var body: some View {
         @Bindable var store = store
         Group {
-            if store.client == nil { ConnectionView() }
-            else if !selectedTamil {
-                VStack(spacing: 28) {
+            if !store.languageChosen {
+                VStack(spacing: 24) {
                     Image(systemName: "leaf").font(.system(size: 52)).foregroundStyle(.green)
-                    Text("வணக்கம்").font(.largeTitle.bold())
-                    Text("உங்கள் பண்ணைக்கு உதவும் வழிகாட்டி").font(.title3).multilineTextAlignment(.center)
-                    Button("தமிழில் தொடரவும்") { selectedTamil = true }.buttonStyle(.borderedProminent).controlSize(.large)
-                    Text("தமிழில் பேசலாம், கேட்கலாம், திருத்தலாம்.").foregroundStyle(.secondary)
-                }.padding(28)
-            } else if store.state == nil {
+                    Text("Kalani").font(.largeTitle.bold())
+                    Text("A Farmer’s Assistant").font(.title3)
+                    Text("Choose your language · மொழியைத் தேர்ந்தெடுக்கவும்").multilineTextAlignment(.center)
+                    Button("தமிழில் தொடரவும்") { selectLanguage("ta-IN") }.accessibilityIdentifier("chooseTamil")
+                    Button("Continue in English") { selectLanguage("en-IN") }.accessibilityIdentifier("chooseEnglish")
+                }.buttonStyle(.borderedProminent).controlSize(.large).padding(28)
+            } else if store.client == nil { ConnectionView() }
+            else if store.state == nil {
                 VStack(spacing: 20) {
-                    if store.connecting { ProgressView("இணைக்கிறது…") }
-                    else { ContentUnavailableView("இணைக்க முடியவில்லை", systemImage: "wifi.slash", description: Text("சேவை இயங்குகிறதா என்று சரிபார்த்து மீண்டும் முயற்சிக்கவும்.")) }
-                    Button("மீண்டும் முயற்சி") { Task { await store.refresh() } }
-                    Button("இணைப்பை மாற்றவும்") { store.clearSession() }
+                    if store.connecting { ProgressView(store.localized("இணைக்கிறது…", "Connecting…")) }
+                    else { ContentUnavailableView(store.localized("இணைக்க முடியவில்லை", "Could not connect"), systemImage: "wifi.slash", description: Text(store.localized("சேவை இயங்குகிறதா என்று சரிபார்த்து மீண்டும் முயற்சிக்கவும்.", "Check that the service is running and try again."))) }
+                    Button(store.localized("மீண்டும் முயற்சி", "Try again")) { Task { await store.refresh() } }
+                    Button(store.localized("இணைப்பை மாற்றவும்", "Change connection")) { store.clearSession() }
+                }.padding()
+            } else if let pending = store.pendingLanguage {
+                VStack(spacing: 20) {
+                    if store.busy {
+                        ProgressView(store.localized("மொழியை அமைக்கிறது…", "Setting your language…"))
+                    } else {
+                        Button(store.localized("மொழியை அமைக்கவும்", "Set language")) { Task { await store.setLanguage(pending) } }
+                        Button(store.localized("இணைப்பை மாற்றவும்", "Change connection")) { store.clearSession() }
+                    }
                 }.padding()
             } else if store.needsOnboarding {
                 NavigationStack { FarmFactsView(onboarding: true) }
             } else {
                 TabView(selection: $store.selectedTab) {
-                    NavigationStack { TodayView() }.tabItem { Label("இன்று", systemImage: "sun.max") }.tag(0)
-                    NavigationStack { ConversationView() }.tabItem { Label("உரையாடல்", systemImage: "bubble.left.and.bubble.right") }.tag(1)
-                    NavigationStack { WeekView() }.tabItem { Label("இந்த வாரம்", systemImage: "calendar") }.tag(2)
-                    NavigationStack { MyFarmView() }.tabItem { Label("என் பண்ணை", systemImage: "leaf") }.tag(3)
+                    NavigationStack { TodayView() }.tabItem { Label(store.localized("இன்று", "Today"), systemImage: "sun.max") }.tag(0)
+                    NavigationStack { ConversationView() }.tabItem { Label(store.localized("உரையாடல்", "Conversation"), systemImage: "bubble.left.and.bubble.right") }.tag(1)
+                    NavigationStack { WeekView() }.tabItem { Label(store.localized("இந்த வாரம்", "This Week"), systemImage: "calendar") }.tag(2)
+                    NavigationStack { MyFarmView() }.tabItem { Label(store.localized("என் பண்ணை", "My Farm"), systemImage: "leaf") }.tag(3)
                 }
             }
         }
         .tint(.green)
-        .alert("தகவல்", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
-            Button("சரி") { store.error = nil }
+        .alert(store.localized("தகவல்", "Information"), isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
+            Button(store.localized("சரி", "OK")) { store.error = nil }
         } message: { Text(store.error ?? "") }
+    }
+    private func selectLanguage(_ locale: String) {
+        store.chooseInitialLanguage(locale)
+        Task { await store.setLanguage(locale) }
     }
 }
 
@@ -89,19 +102,19 @@ struct ConnectionView: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("உங்கள் பண்ணையின் பாதுகாப்பான இணைப்பு").font(.headline)
-                    Text("முதல் முறையில் மட்டும் இந்த இணைப்பை அமைக்க வேண்டும். உங்கள் உதவியாளரின் உதவியையும் பெறலாம்.")
+                    Text(store.localized("உங்கள் பண்ணையின் பாதுகாப்பான இணைப்பு", "Connect securely to your farm")).font(.headline)
+                    Text(store.localized("முதல் முறையில் மட்டும் இந்த இணைப்பை அமைக்க வேண்டும். உங்கள் உதவியாளரின் உதவியையும் பெறலாம்.", "Set this up once. A trusted helper can assist you."))
                 }
-                Section("இணைப்பு அமைப்பு · Local demo") {
-                    TextField("சேவை முகவரி", text: $url).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("serverURL")
-                    SecureField("பண்ணைக்கான இணைப்புக் குறியீடு", text: $token).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("sessionToken")
-                    Text("இது பண்ணைக்கான தனிப்பட்ட குறியீடு. Claude அல்லது speech API key இங்கு தேவையில்லை.").font(.caption).foregroundStyle(.secondary)
-                    Button("இணைக்கவும்") {
+                Section(store.localized("இணைப்பு அமைப்பு · உள்ளூர் சோதனை", "Connection setup · Local demo")) {
+                    TextField(store.localized("சேவை முகவரி", "Service address"), text: $url).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("serverURL")
+                    SecureField(store.localized("பண்ணைக்கான இணைப்புக் குறியீடு", "Farm connection code"), text: $token).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("sessionToken")
+                    Text(store.localized("இது பண்ணைக்கான தனிப்பட்ட குறியீடு. Claude அல்லது speech API key இங்கு தேவையில்லை.", "Use your private farm connection code. Provider API keys are handled by the service.")).font(.caption).foregroundStyle(.secondary)
+                    Button(store.localized("இணைக்கவும்", "Connect")) {
                         do { try store.configure(url: url, token: token) }
-                        catch { store.error = "முகவரியைச் சரிபார்க்கவும். HTTPS அல்லது இந்த Mac-இன் localhost இணைப்பைப் பயன்படுத்தவும்." }
+                        catch { store.error = store.localized("முகவரியைச் சரிபார்க்கவும். HTTPS அல்லது இந்த Mac-இன் localhost இணைப்பைப் பயன்படுத்தவும்.", "Check the address. Use HTTPS or the local connection on this Mac.") }
                     }.disabled(token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("connect")
                 }
-            }.navigationTitle("பண்ணை உதவி")
+            }.navigationTitle("Kalani")
         }.onAppear { url = store.baseURL }
     }
 }

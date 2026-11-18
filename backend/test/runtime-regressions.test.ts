@@ -5,9 +5,9 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { BACKGROUND_CONTEXT as ctx } from '@earendil-works/chord/context';
-import { SPEECH_TEXT_LIMIT } from '../src/adapters.js';
+import { SPEECH_TEXT_LIMIT, type FarmLocale } from '../src/adapters.js';
 import { openFarmRuntime, type FarmRuntime, type RuntimeOptions } from '../src/runtime.js';
-import { FarmDoc, publicState } from '../src/domain.js';
+import { FarmDoc, decodePlan, publicState } from '../src/domain.js';
 import { fixtures, owner, seed, waitState } from './support/fixtures.js';
 import { testPiModel } from './support/pi-model.js';
 async function withApp(run:(app:FarmRuntime,directory:string)=>Promise<void>, options:Partial<RuntimeOptions>={}){
@@ -133,6 +133,55 @@ test('reconciliation repairs oversized text and a speech failure preserves the c
   if(++speechCalls===1)throw new Error('Synthetic synthesis outage');
   return {audio:Buffer.from('SYNTHETIC SPEECH RETRY BYTES'),mime:'audio/wav'};
  }}});
+});
+
+test('same farmer switches language while a voice message is processing without changing the original reply locale',async()=>{
+ const fixture=fixtures('/unused');
+ const model=testPiModel();
+ const calls:{stage:string;locale?:FarmLocale}[]=[];
+ let entered!:()=>void, release!:()=>void;
+ const reached=new Promise<void>(resolve=>{entered=resolve;});
+ const gate=new Promise<void>(resolve=>{release=resolve;});
+ await withApp(async app=>{
+  await seed(app);
+  assert.equal((await app.state(owner)).preferences.locale,'ta-IN');
+  await app.preferences(owner,{requestId:'select-english',locale:'en-IN'});
+  const recording=await app.upload(owner,'language-recording-001',Buffer.from('SYNTHETIC LANGUAGE RECORDING'),'audio/wav');
+  const english=await app.submit(owner,{requestId:'language-english-001',audioId:recording});
+  await reached;
+  try{await app.preferences(owner,{requestId:'select-tamil',locale:'ta-IN'});}finally{release();}
+  await waitState(app,s=>s.messages.some(m=>m.id===`reply-${english}`&&m.audioStatus==='ready'));
+  const tamil=await app.submit(owner,{requestId:'language-tamil-001',audioId:recording});
+  const state=await waitState(app,s=>s.messages.some(m=>m.id===`reply-${tamil}`&&m.audioStatus==='ready'));
+  assert.equal(state.preferences.locale,'ta-IN');
+  assert.equal(state.messages.find(m=>m.id===english)?.text,'Will it rain this week?');
+  assert.match(state.messages.find(m=>m.id===`reply-${english}`)!.text,/Check the field/);
+  assert.equal(state.messages.find(m=>m.id===`reply-${english}`)?.locale,'en-IN');
+  assert.equal(state.messages.find(m=>m.id===tamil)?.text,'இந்த வாரம் மழை பெய்யுமா?');
+  assert.equal(state.messages.find(m=>m.id===`reply-${tamil}`)?.locale,'ta-IN');
+  assert.deepEqual(calls,[{stage:'stt',locale:'en-IN'},{stage:'tts',locale:'en-IN'},{stage:'stt',locale:'ta-IN'},{stage:'tts',locale:'ta-IN'}]);
+  for(const [language,role] of [['English (en-IN)','weather_evidence'],['English (en-IN)','confirmed_farm_context'],['Tamil (ta-IN)','weather_evidence'],['Tamil (ta-IN)','confirmed_farm_context']]){
+   assert.ok(model.requests.some(r=>r.toolNames.includes(role!)&&r.lastUser.includes(language!)));
+  }
+  await assert.rejects(app.preferences(owner,{requestId:'unsupported-hindi',locale:'hi-IN'}),{code:'unsupported_locale'});
+  assert.equal((await app.state(owner)).preferences.locale,'ta-IN');
+ },{models:model.models,modelId:model.modelId,modelConfigured:true,testReasoner:undefined,speech:{...fixture.speech!,
+  transcribe:async(_audio,_mime,_keywords,locale)=>{
+   calls.push({stage:'stt',locale});
+   if(locale==='en-IN'){entered();await gate;return {text:'Will it rain this week?',language:locale};}
+   return {text:'இந்த வாரம் மழை பெய்யுமா?',language:'ta-IN'};
+  },
+  synthesize:async(text,locale)=>{calls.push({stage:'tts',locale});return fixture.speech!.synthesize(text,locale);},
+ }});
+});
+
+test('plan validation gates pure opposite-language reply text',()=>{
+ const english={kind:'clarification',text:'Where is your field?',evidenceIds:[],missingFacts:[],uncertainty:[],tasks:[]};
+ const tamil={...english,text:'உங்கள் வயல் எங்கே உள்ளது?'};
+ assert.equal(decodePlan(JSON.stringify(english),'en-IN').text,english.text);
+ assert.equal(decodePlan(JSON.stringify(tamil),'ta-IN').text,tamil.text);
+ assert.throws(()=>decodePlan(JSON.stringify(english),'ta-IN'),{code:'invalid_model_output'});
+ assert.throws(()=>decodePlan(JSON.stringify(tamil),'en-IN'),{code:'invalid_model_output'});
 });
 
 test('prototype-shaped request IDs, farmer IDs, facts and media lookups cannot bypass ownership',async()=>withApp(async app=>{

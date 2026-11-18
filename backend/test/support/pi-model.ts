@@ -17,8 +17,9 @@ export function testPiModel(beforeMain?:()=>Promise<void>, weatherReply?: (promp
   if(tool.name==='confirmed_farm_context')await beforeMain?.();
   if(last?.role!=='toolResult')return fauxAssistantMessage(fauxToolCall(tool.name,{}),{stopReason:'toolUse'});
   if(tool.name==='weather_evidence')return fauxAssistantMessage(weatherReply?.(text)??JSON.stringify({summary:'Synthetic weather finding from the actual Pi tool result',evidenceIds:['synthetic-weather'],applicability:'Synthetic field only',missingFacts:[],uncertainty:['Synthetic fixture']}));
-  let echoed='';try{echoed=JSON.parse(text.split('DATA: ')[1]??'{}').message??'';}catch{}
-  return fauxAssistantMessage(JSON.stringify({kind:'guidance',text:`${echoed} இது சோதனைத் தகவல். வயலைப் பார்வையிடவும்.`,evidenceIds:['synthetic-weather'],missingFacts:[],uncertainty:['Synthetic fixture'],tasks:[{title:'வயலைப் பார்வையிடவும்',reason:'சோதனை வானிலை தகவல்',dueAt:new Date(Date.now()+10000).toISOString(),evidenceIds:['synthetic-weather'],uncertainty:['Synthetic fixture']}]}));
+  let packet:{message?:string;locale?:string}={};try{packet=JSON.parse(text.split('DATA: ')[1]??'{}');}catch{}
+  const english=packet.locale==='en-IN';
+  return fauxAssistantMessage(JSON.stringify({kind:'guidance',text:`${packet.message??''} ${english?'Synthetic test guidance. Check the field.':'இது சோதனைத் தகவல். வயலைப் பார்வையிடவும்.'}`,evidenceIds:['synthetic-weather'],missingFacts:[],uncertainty:['Synthetic fixture'],tasks:[{title:english?'Check the field':'வயலைப் பார்வையிடவும்',reason:english?'Synthetic weather information':'சோதனை வானிலை தகவல்',dueAt:new Date(Date.now()+10000).toISOString(),evidenceIds:['synthetic-weather'],uncertainty:['Synthetic fixture']}]}));
  };
  faux.setResponses(Array.from({length:100},()=>response));
  return {models,faux,requests,modelId:'synthetic-farm-model'};

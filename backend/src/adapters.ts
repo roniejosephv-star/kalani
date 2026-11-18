@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 
 export const SPEECH_TEXT_LIMIT = 2500;
+export type FarmLocale = 'ta-IN' | 'en-IN';
+export const DEFAULT_LOCALE: FarmLocale = 'ta-IN';
 
 export interface Evidence {
   id: string;
@@ -31,7 +33,7 @@ export interface AdapterOptions {
 }
 
 export class AdapterError extends Error {
-  constructor(public readonly code: 'unconfigured' | 'invalid_input' | 'unavailable' | 'invalid_response', message: string) {
+  constructor(public readonly code: 'unconfigured' | 'invalid_input' | 'unavailable' | 'invalid_response', message: string, public readonly httpStatus?: number) {
     super(message);
     this.name = 'AdapterError';
   }
@@ -46,7 +48,7 @@ const unavailable = (error: unknown): SourceResult => ({ status: 'unavailable', 
 async function requestJSON(url: string, init: RequestInit, options: AdapterOptions): Promise<unknown> {
   try {
     const response = await (options.fetch ?? fetch)(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(options.timeoutMs ?? 20_000) });
-    if (!response.ok) throw new AdapterError('unavailable', `Provider returned HTTP ${response.status}.`);
+    if (!response.ok) throw new AdapterError('unavailable', `Provider returned HTTP ${response.status}.`, response.status);
     const length = Number(response.headers.get('content-length'));
     if (length > 16_000_000) throw new AdapterError('invalid_response', 'Provider response exceeded the size limit.');
     const reader = response.body?.getReader();
@@ -175,26 +177,26 @@ export function createSpeechAdapter(options: AdapterOptions & { apiKey?: string;
   const sttModel = options.sttModel ?? 'saaras:v4';
   const ttsModel = options.ttsModel ?? 'bulbul:v3';
   const headers = () => {
-    if (!apiKey) throw new AdapterError('unconfigured', 'Tamil speech service is not configured.');
+    if (!apiKey) throw new AdapterError('unconfigured', 'Speech service is not configured.');
     return { 'api-subscription-key': apiKey };
   };
   return {
     configured: !!apiKey,
-    async transcribe(audio: Buffer, mime: string, keyterms: string[] = []): Promise<{ text: string; language: string | null; providerRequestId?: string }> {
+    async transcribe(audio: Buffer, mime: string, keyterms: string[] = [], locale:FarmLocale = DEFAULT_LOCALE): Promise<{ text: string; language: string | null; providerRequestId?: string }> {
       const extensions: Record<string, string> = { 'audio/mp4': 'm4a', 'audio/m4a': 'm4a', 'audio/x-m4a': 'm4a', 'audio/wav': 'wav', 'audio/mpeg': 'mp3', 'audio/aac': 'aac', 'audio/webm': 'webm', 'audio/ogg': 'ogg' };
       if (!audio.length || audio.length > 5_000_000 || !extensions[mime]) throw new AdapterError('invalid_input', 'Use a supported short audio recording under 5 MB.');
       const form = new FormData();
       form.set('file', new Blob([new Uint8Array(audio)], { type: mime }), `recording.${extensions[mime]}`);
       form.set('model', sttModel);
-      form.set('language_code', 'ta-IN');
+      form.set('language_code', locale);
       if (sttModel === 'saaras:v4' && keyterms.length) form.set('keyterms', JSON.stringify(keyterms.filter(term => term.trim()).slice(0, 50).map(term => term.slice(0, 64))));
       const raw = await requestJSON('https://api.sarvam.ai/speech-to-text', { method: 'POST', headers: headers(), body: form }, { ...options, timeoutMs: options.timeoutMs ?? 45_000 });
       if (!object(raw) || typeof raw.transcript !== 'string' || !raw.transcript.trim() || raw.transcript.length > 10_000 || !(raw.language_code === null || typeof raw.language_code === 'string')) throw new AdapterError('invalid_response', 'Speech recognition returned no usable transcript.');
       return { text: raw.transcript, language: raw.language_code, ...(typeof raw.request_id === 'string' && { providerRequestId: raw.request_id }) };
     },
-    async synthesize(text: string): Promise<{ audio: Buffer; mime: 'audio/wav'; providerRequestId?: string }> {
+    async synthesize(text: string, locale:FarmLocale = DEFAULT_LOCALE): Promise<{ audio: Buffer; mime: 'audio/wav'; providerRequestId?: string }> {
       if (!text.trim() || [...text].length > SPEECH_TEXT_LIMIT) throw new AdapterError('invalid_input', `Spoken responses must contain between 1 and ${SPEECH_TEXT_LIMIT} characters.`);
-      const raw = await requestJSON('https://api.sarvam.ai/text-to-speech', { method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify({ text, language_code: 'ta-IN', model: ttsModel, ...(options.speaker && { speaker: options.speaker }), output_audio_codec: 'wav', speech_sample_rate: 22050 }) }, { ...options, timeoutMs: options.timeoutMs ?? 45_000 });
+      const raw = await requestJSON('https://api.sarvam.ai/text-to-speech', { method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify({ text, language_code: locale, model: ttsModel, ...(options.speaker && { speaker: options.speaker }), output_audio_codec: 'wav', speech_sample_rate: 22050 }) }, { ...options, timeoutMs: options.timeoutMs ?? 45_000 });
       if (!object(raw) || !Array.isArray(raw.audios) || raw.audios.length !== 1 || typeof raw.audios[0] !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(raw.audios[0])) throw new AdapterError('invalid_response', 'Speech synthesis returned invalid audio.');
       const audio = Buffer.from(raw.audios[0], 'base64');
       if (!completeWave(audio)) throw new AdapterError('invalid_response', 'Speech synthesis returned an incomplete or invalid WAV file.');

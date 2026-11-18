@@ -93,7 +93,15 @@ test('Tamil transcription sends locale and confirmed vocabulary without assuming
   assert.deepEqual(await adapter.transcribe(Buffer.from('fixture'), 'audio/mp4', ['நெல்']), { text: 'நெல்', language: 'ta-IN', providerRequestId: 'stt-1' });
 });
 
-test('Tamil synthesis requests matching text, validates complete WAV and does not publish partial media', async () => {
+test('speech adapter requests English transcription when selected',async()=>{
+  const adapter=createSpeechAdapter({apiKey:'test',fetch:jsonFetch({transcript:'Will it rain this week?',language_code:'en-IN'},(_url,init)=>{
+    assert.equal((init!.body as FormData).get('language_code'),'en-IN');
+  })});
+  const result=await adapter.transcribe(Buffer.from('fixture'),'audio/mp4',[],'en-IN');
+  assert.equal(result.text,'Will it rain this week?');assert.equal(result.language,'en-IN');
+});
+
+test('synthesis requests matching text and locale, validates complete WAV and does not publish partial media', async () => {
   const wav = Buffer.alloc(46); wav.write('RIFF'); wav.writeUInt32LE(38, 4); wav.write('WAVE', 8); wav.write('fmt ', 12); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(22050, 24); wav.writeUInt32LE(44100, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(2, 40);
   const adapter = createSpeechAdapter({ apiKey: 'test', fetch: jsonFetch({ audios: [wav.toString('base64')] }, (_url, init) => {
     const body = JSON.parse(init!.body as string);
@@ -102,6 +110,10 @@ test('Tamil synthesis requests matching text, validates complete WAV and does no
     assert.equal(body.model, 'bulbul:v3');
   }) });
   assert.deepEqual((await adapter.synthesize('வணக்கம்')).audio, wav);
+  const english=createSpeechAdapter({apiKey:'test',fetch:jsonFetch({audios:[wav.toString('base64')]},(_url,init)=>{
+    const body=JSON.parse(init!.body as string);assert.equal(body.text,'Will it rain this week?');assert.equal(body.language_code,'en-IN');
+  })});
+  assert.deepEqual((await english.synthesize('Will it rain this week?','en-IN')).audio,wav);
   await assert.rejects(createSpeechAdapter({ apiKey: 'test', fetch: jsonFetch({ audios: [wav.subarray(0, 44).toString('base64')] }) }).synthesize('வணக்கம்'), { code: 'invalid_response' });
   await assert.rejects(createSpeechAdapter({ apiKey: 'test', fetch: jsonFetch({ audios: ['YQ=='] }) }).synthesize('வணக்கம்'), { code: 'invalid_response' });
   await assert.rejects(adapter.synthesize('x'.repeat(2501)), { code: 'invalid_input' });
