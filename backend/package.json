@@ -1,0 +1,26 @@
+{
+  "name": "tamil-farm-runtime",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test test/*.test.ts",
+    "start": "node --env-file-if-exists=.env --import tsx src/server.ts",
+    "check": "npm run build && npm test",
+    "admin": "node --env-file-if-exists=.env --import tsx src/admin.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-durable": "1.5.2",
+    "@earendil-works/pi-ai": "1.5.2",
+    "@earendil-works/chord": "1.5.2",
+    "@earendil-works/pi-schema": "1.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "26.0.0",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3"
+  }
+}

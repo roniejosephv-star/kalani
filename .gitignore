@@ -1,0 +1,11 @@
+node_modules/
+backend/dist/
+.env
+.env.*
+!.env.example
+.runtime/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+pitch-deck/.openai/

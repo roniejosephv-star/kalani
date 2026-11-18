@@ -1,0 +1,48 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+000000000000000000000064 = {isa = PBXBuildFile; fileRef = 0000000000000000000000C8; };
+0000000000000000000000C8 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+000000000000000000000065 = {isa = PBXBuildFile; fileRef = 0000000000000000000000C9; };
+0000000000000000000000C9 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioController.swift; sourceTree = "<group>"; };
+000000000000000000000066 = {isa = PBXBuildFile; fileRef = 0000000000000000000000CA; };
+0000000000000000000000CA = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViews.swift; sourceTree = "<group>"; };
+000000000000000000000067 = {isa = PBXBuildFile; fileRef = 0000000000000000000000CB; };
+0000000000000000000000CB = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FarmAssistantApp.swift; sourceTree = "<group>"; };
+000000000000000000000068 = {isa = PBXBuildFile; fileRef = 0000000000000000000000CC; };
+0000000000000000000000CC = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FarmStore.swift; sourceTree = "<group>"; };
+000000000000000000000069 = {isa = PBXBuildFile; fileRef = 0000000000000000000000CD; };
+0000000000000000000000CD = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FarmViews.swift; sourceTree = "<group>"; };
+00000000000000000000006A = {isa = PBXBuildFile; fileRef = 0000000000000000000000CE; };
+0000000000000000000000CE = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+000000000000000000000001 = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 2720;}; buildConfigurationList = 000000000000000000000009; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base, ta); mainGroup = 000000000000000000000002; productRefGroup = 000000000000000000000004; projectDirPath = ""; projectRoot = ""; targets = (000000000000000000000005, 00000000000000000000012C); };
+000000000000000000000002 = {isa = PBXGroup; children = (000000000000000000000003, 000000000000000000000004, 00000000000000000000012D); sourceTree = "<group>"; };
+000000000000000000000003 = {isa = PBXGroup; children = (0000000000000000000000C8,0000000000000000000000C9,0000000000000000000000CA,0000000000000000000000CB,0000000000000000000000CC,0000000000000000000000CD,0000000000000000000000CE); path = FarmAssistant; sourceTree = "<group>"; };
+000000000000000000000004 = {isa = PBXGroup; children = (000000000000000000000006, 00000000000000000000012E); name = Products; sourceTree = "<group>"; };
+000000000000000000000005 = {isa = PBXNativeTarget; buildConfigurationList = 00000000000000000000000A; buildPhases = (000000000000000000000007, 000000000000000000000008); buildRules = (); dependencies = (); name = FarmAssistant; productName = FarmAssistant; productReference = 000000000000000000000006; productType = "com.apple.product-type.application"; };
+000000000000000000000006 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FarmAssistant.app; sourceTree = BUILT_PRODUCTS_DIR; };
+000000000000000000000007 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000064,000000000000000000000065,000000000000000000000066,000000000000000000000067,000000000000000000000068,000000000000000000000069,00000000000000000000006A); runOnlyForDeploymentPostprocessing = 0; };
+000000000000000000000008 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+000000000000000000000009 = {isa = XCConfigurationList; buildConfigurations = (00000000000000000000000B, 00000000000000000000000C); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+00000000000000000000000A = {isa = XCConfigurationList; buildConfigurations = (00000000000000000000000D, 00000000000000000000000E); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+00000000000000000000000B = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SWIFT_VERSION = 5.0; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; }; name = Debug; };
+00000000000000000000000C = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SWIFT_VERSION = 5.0; SWIFT_OPTIMIZATION_LEVEL = "-O"; }; name = Release; };
+00000000000000000000000D = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = FarmAssistant/Info.plist; PRODUCT_BUNDLE_IDENTIFIER = "local.farmassistant.demo$(FARM_DEMO_SUFFIX)"; PRODUCT_NAME = "$(TARGET_NAME)"; TARGETED_DEVICE_FAMILY = 1; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_EMIT_LOC_STRINGS = YES; }; name = Debug; };
+00000000000000000000000E = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = FarmAssistant/Info.plist; PRODUCT_BUNDLE_IDENTIFIER = local.farmassistant.demo; PRODUCT_NAME = "$(TARGET_NAME)"; TARGETED_DEVICE_FAMILY = 1; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_EMIT_LOC_STRINGS = YES; }; name = Release; };
+00000000000000000000012C = {isa = PBXNativeTarget; buildConfigurationList = 000000000000000000000130; buildPhases = (000000000000000000000131); buildRules = (); dependencies = (000000000000000000000136); name = FarmAssistantUITests; productName = FarmAssistantUITests; productReference = 00000000000000000000012E; productType = "com.apple.product-type.bundle.ui-testing"; };
+00000000000000000000012D = {isa = PBXGroup; children = (00000000000000000000012F); path = FarmAssistantUITests; sourceTree = "<group>"; };
+00000000000000000000012E = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FarmAssistantUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+00000000000000000000012F = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceJourneyTests.swift; sourceTree = "<group>"; };
+000000000000000000000130 = {isa = XCConfigurationList; buildConfigurations = (000000000000000000000133, 000000000000000000000134); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+000000000000000000000131 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000132); runOnlyForDeploymentPostprocessing = 0; };
+000000000000000000000132 = {isa = PBXBuildFile; fileRef = 00000000000000000000012F; };
+000000000000000000000133 = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = local.farmassistant.stability.tests; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_TARGET_NAME = FarmAssistant; TARGETED_DEVICE_FAMILY = 1;}; name = Debug; };
+000000000000000000000134 = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = local.farmassistant.stability.tests; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_TARGET_NAME = FarmAssistant; TARGETED_DEVICE_FAMILY = 1;}; name = Release; };
+000000000000000000000135 = {isa = PBXContainerItemProxy; containerPortal = 000000000000000000000001; proxyType = 1; remoteGlobalIDString = 000000000000000000000005; remoteInfo = FarmAssistant; };
+000000000000000000000136 = {isa = PBXTargetDependency; target = 000000000000000000000005; targetProxy = 000000000000000000000135; };
+};
+rootObject = 000000000000000000000001;
+}

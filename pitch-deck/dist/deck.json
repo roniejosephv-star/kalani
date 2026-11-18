@@ -1,0 +1,187 @@
+{
+  "title": "Kalani",
+  "description": "Kalani. A Farmer's Assistant. A Tamil-first farm assistant prototype, its architecture and verified engineering progress.",
+  "date": "18 November 2026",
+  "duration": "5 minutes",
+  "slides": [
+    {
+      "id": "intro",
+      "layout": "cover",
+      "eyebrow": "LOCAL PROTOTYPE · NOVEMBER 2026",
+      "title": "Kalani",
+      "subtitle": "A Farmer's Assistant",
+      "groups": [{"label": "Built so far", "text": "Native iPhone app. Durable agent workflows. Farmer-controlled decisions."}],
+      "image": "assets/app-today.jpg",
+      "imageCaption": "Actual iPhone Simulator capture · synthetic profile · no generated guidance shown",
+      "footnote": "Product and engineering showcase",
+      "seconds": 25,
+      "notes": "I built Kalani, a Tamil-first farm assistant prototype that connects an iPhone conversation to a durable backend. The goal is to help a farmer decide what needs attention next and understand why. This is an actual Simulator screen with a synthetic profile. The app and orchestration exist, while live-service acceptance and farmer validation remain ahead.",
+      "sources": ["README.md", "ios/FarmAssistant/FarmAssistantApp.swift"]
+    },
+    {
+      "id": "problem",
+      "layout": "problem",
+      "eyebrow": "THE PRODUCT HYPOTHESIS",
+      "title": "One farm decision, several sources",
+      "subtitle": "The farmer needs a useful next step that fits their crop, place and constraints.",
+      "groups": [
+        {"label": "Field observations", "text": "Crop, stage, water and available labour"},
+        {"label": "Weather", "text": "Dated forecasts and changing conditions"},
+        {"label": "Markets", "text": "Comparable, dated observations"},
+        {"label": "Guidance and support", "text": "Applicable advice and official opportunities"}
+      ],
+      "focus": "What deserves attention next?",
+      "footnote": "These needs are product hypotheses. Farmer research and outcome validation are still required.",
+      "seconds": 30,
+      "notes": "The hypothesis is that deciding what to do next requires connecting several kinds of information. A forecast alone is not a farm plan, and a market observation is not an offer. The product brings these inputs together around confirmed crop and location facts. I have treated accessibility and relevance as hypotheses to test with farmers, rather than claiming completed field research.",
+      "sources": ["PRD.md sections 1–3"]
+    },
+    {
+      "id": "journey",
+      "layout": "journey",
+      "eyebrow": "THE FARMER EXPERIENCE",
+      "title": "A conversation with clear choices",
+      "subtitle": "Tamil voice and text, with confirmation before consequential facts drive guidance.",
+      "groups": [
+        {"label": "Describe", "text": "Speak or type the immediate concern"},
+        {"label": "Confirm", "text": "Check the crop, village and relevant details"},
+        {"label": "Understand", "text": "Review the response, evidence and unknowns"},
+        {"label": "Decide", "text": "Approve, postpone or reject a task"},
+        {"label": "Return", "text": "Report work or correct the saved context"}
+      ],
+      "focus": "பேசலாம். கேட்கலாம். திருத்தலாம்.",
+      "focusTranslation": "Speak. Listen. Correct.",
+      "footnote": "Intended product journey. Live speech quality and Tamil comprehension await acceptance.",
+      "seconds": 30,
+      "notes": "The farmer starts with a concern rather than a long form. The app supports text, recorded audio with preview and consent, and explicit confirmation of important facts. The farmer can inspect evidence and make a separate decision about each task. This is the intended journey implemented across client and backend, with the complete live Tamil experience still awaiting acceptance.",
+      "sources": ["ios/README.md", "PRODUCT_SPECIFICATIONS.md"]
+    },
+    {
+      "id": "app",
+      "layout": "screens",
+      "eyebrow": "WHAT I BUILT",
+      "title": "A native iPhone app in Tamil",
+      "subtitle": "Today, Conversation, This Week and My Farm connect the everyday workflow.",
+      "images": [
+        {"src": "assets/app-conversation.jpg", "label": "Conversation", "caption": "Actual Simulator · no live reply"},
+        {"src": "assets/app-week.jpg", "label": "This Week", "caption": "Actual Simulator · no planned tasks"},
+        {"src": "assets/app-farm.jpg", "label": "My Farm", "caption": "Actual Simulator · synthetic profile"}
+      ],
+      "footnote": "Screens captured from the running app. Final UI refinement and native-speaker copy review remain ahead.",
+      "seconds": 30,
+      "notes": "These are captures from the native SwiftUI app, not generated mockups. Conversation supports questions and evidence, This Week contains task decisions, and My Farm keeps confirmed context editable. Today is the ordinary return screen shown on the cover. The prototype has no canned assistant replies. Empty states are retained honestly rather than filling them with invented results.",
+      "sources": ["ios/FarmAssistant/ConversationViews.swift", "ios/FarmAssistant/FarmViews.swift"]
+    },
+    {
+      "id": "architecture",
+      "layout": "architecture",
+      "eyebrow": "COOPERATING SPECIALISTS",
+      "title": "One durable workflow, relevant agents",
+      "subtitle": "The orchestrator selects specialists when the request and available evidence justify them.",
+      "groups": [
+        {"label": "iPhone app", "text": "SwiftUI conversation and decisions"},
+        {"label": "Pi Durable + Claude", "text": "Checkpointed orchestration and reconciliation"},
+        {"label": "Specialists", "text": "Weather · Crop · Market · Opportunities"},
+        {"label": "Evidence and validation", "text": "Open-Meteo, CEDA and reviewed catalogues"},
+        {"label": "Saved state and speech", "text": "SQLite memory and Sarvam Tamil adapters"}
+      ],
+      "footnote": "Provider adapters exist in code. Live acceptance and reviewed crop/scheme coverage remain outstanding.",
+      "seconds": 35,
+      "notes": "The native app talks to one TypeScript backend. Pi Durable coordinates checkpointed work and uses Claude through its Anthropic provider. Relevant specialists contribute bounded findings, which are reconciled and validated before publication. SQLite holds authoritative state. Sarvam adapters handle speech separately. Not every request invokes all four specialists, and implemented adapters do not establish live provider quality or source coverage.",
+      "sources": ["backend/src/runtime.ts", "backend/src/adapters.ts", "backend/src/domain.ts"]
+    },
+    {
+      "id": "request-trace",
+      "layout": "trace",
+      "eyebrow": "A SYNTHETIC REGRESSION SCENARIO",
+      "title": "A changed crop blocks outdated guidance",
+      "subtitle": "Publication checks the current farm context before a proposed task reaches the farmer.",
+      "groups": [
+        {"label": "Request", "text": "A synthetic rice profile asks for a plan"},
+        {"label": "Evidence", "text": "Synthetic weather supports specialist findings"},
+        {"label": "Validation", "text": "Check sources, task rules and farm version"}
+      ],
+      "branches": [
+        {"label": "Context unchanged", "text": "Publish one proposed task. Farmer approval remains separate."},
+        {"label": "Crop corrected before publication", "text": "Supersede the request. Publish no reply and no task."}
+      ],
+      "footnote": "Diagram combines two existing synthetic tests. No live farm advice or measured outcome.",
+      "seconds": 35,
+      "notes": "This diagram combines two existing synthetic tests. In the unchanged-context test, repeated submission produces one workflow and one proposed task. In the correction test, the crop changes from rice to cotton at the publication checkpoint. The old request is superseded and publishes neither a reply nor a task. This is engineering evidence about consistency, not an agricultural recommendation or a completed field demonstration.",
+      "sources": ["backend/test/runtime.test.ts:33–44 and 58–65", "backend/test/support/fixtures.ts:15–21"]
+    },
+    {
+      "id": "control",
+      "layout": "control",
+      "eyebrow": "MEMORY AND FARMER CONTROL",
+      "title": "Saved context, explicit decisions",
+      "subtitle": "Memory helps the conversation continue while the farmer controls facts and tasks.",
+      "groups": [
+        {"label": "Confirm", "text": "Consequential farm facts need confirmation"},
+        {"label": "Correct", "text": "Changed context invalidates unfinished guidance"},
+        {"label": "Decide", "text": "Approval records the exact task version"},
+        {"label": "Review", "text": "Candidate playbooks need review before reuse"}
+      ],
+      "focus": "A reported task completion stays farmer-reported.",
+      "footnote": "Approval records agreement. The app does not purchase inputs, operate equipment or submit benefit applications.",
+      "seconds": 30,
+      "notes": "The system distinguishes confirmed facts, dated farmer reports and candidate playbooks. Corrections change dependent unfinished guidance. Task decisions include the exact version, so an old approval cannot silently approve revised work. Reported completion does not establish measured effectiveness. Learning proposals require review and evaluation, and do not automatically rewrite deployed prompts, tools or agricultural rules.",
+      "sources": ["backend/src/domain.ts", "backend/src/runtime.ts", "backend/src/learning.ts"]
+    },
+    {
+      "id": "verification",
+      "layout": "verification",
+      "eyebrow": "AUTOMATED PROTOTYPE CHECKS",
+      "title": "45 backend tests have passing results",
+      "subtitle": "TypeScript compilation passed. Checks exercise the real durable runtime with synthetic providers.",
+      "stat": "45",
+      "statLabel": "tests verified",
+      "groups": [
+        {"label": "Recovery", "text": "Resume after termination at five workflow stages"},
+        {"label": "Duplicate handling", "text": "One workflow and reply for repeated submission"},
+        {"label": "Farmer control", "text": "Owner and task-version checks"},
+        {"label": "Guidance safeguards", "text": "Stale-context blocking and refusal checks"},
+        {"label": "Data restoration", "text": "Checksum-verified backup and audio restore"}
+      ],
+      "footnote": "18 Nov 2026: 44 passed in the full run; the sandbox-blocked HTTP test passed separately with loopback access.",
+      "seconds": 30,
+      "notes": "The current TypeScript compilation passed. Forty-four backend tests passed in the full run. The HTTP test was blocked by sandbox socket permissions, then passed when rerun separately with loopback access, giving passing results for all forty-five. Tests use synthetic providers. They establish the checked engineering behaviors, not live speech quality, Tamil comprehension, agricultural accuracy, latency targets or production readiness.",
+      "sources": ["backend/package.json check script", "backend/test/runtime.test.ts", "backend/test/runtime-regressions.test.ts", "backend/test/http.test.ts", "backend/test/admin.test.ts"]
+    },
+    {
+      "id": "next",
+      "layout": "status",
+      "eyebrow": "CURRENT STAGE",
+      "title": "A local prototype ready for further validation",
+      "subtitle": "The next milestone is an accepted live Tamil journey with reviewed, applicable evidence.",
+      "columns": ["Built", "Awaiting validation", "Next milestone"],
+      "rows": [
+        ["Native iPhone workflow", "Tamil copy and comprehension", "Native-speaker and farmer review"],
+        ["AI, speech and source adapters", "Live access, quality and coverage", "End-to-end provider acceptance"],
+        ["Source and applicability checks", "Reviewed crop/scheme catalogue", "Install and review supported records"],
+        ["Local persistence and recovery", "Hosting, retention and delivery", "Production readiness assessment"]
+      ],
+      "footnote": "No farmer adoption, profit or yield impact established. Production APNs and WhatsApp delivery are not integrated.",
+      "seconds": 30,
+      "notes": "The current environment is a local Mac backend and iPhone Simulator. The next milestone is a complete live journey that passes provider, source-fidelity and Tamil comprehension review. That also needs maintained crop and scheme records. Production hosting, retention and real device delivery need separate work. There are no established farmer adoption figures or measured profit or yield results to present.",
+      "sources": ["README.md sections Sources and delivery, Memory review and recovery, Verification", "PRD.md"]
+    },
+    {
+      "id": "collaborate",
+      "layout": "closing",
+      "eyebrow": "FEEDBACK AND COLLABORATION",
+      "title": "Help test what matters next",
+      "subtitle": "Looking for reviewers who can turn a working prototype into a better-validated farmer experience.",
+      "groups": [
+        {"label": "Agricultural reviewers", "text": "Check sources, local applicability and expert-help boundaries"},
+        {"label": "Tamil-speaking reviewers", "text": "Check wording, speech comprehension and the farmer journey"},
+        {"label": "Technical collaborators", "text": "Review recovery, privacy, live integrations and deployment readiness"}
+      ],
+      "focus": "Which assumption should we test first?",
+      "footnote": "Kalani · A Farmer's Assistant · Local prototype · 18 November 2026",
+      "seconds": 25,
+      "notes": "I am looking for three kinds of feedback: agricultural review of evidence and applicability, Tamil-language review of wording and comprehension, and technical review of reliability and production readiness. The immediate goal is to test the most important assumptions before a farmer pilot. I would welcome a discussion about which assumption should be tested first and who could help review it.",
+      "sources": ["PRD.md validation requirements", "README.md verification limits"]
+    }
+  ]
+}

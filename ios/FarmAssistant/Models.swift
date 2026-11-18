@@ -1,0 +1,130 @@
+import Foundation
+
+struct FarmerState: Decodable {
+    let version: Int
+    let facts: [String: FactValue]
+    let fieldId: String
+    let cycleId: String
+    let preferences: Preferences
+    let messages: [FarmMessage]
+    let tasks: [FarmTask]
+    let evidence: [Evidence]
+    let notifications: [FarmNotification]
+    let sequence: Int
+}
+
+enum FactValue: Decodable {
+    case text(String), number(Double)
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer()
+        if let number = try? value.decode(Double.self) { self = .number(number) }
+        else { self = .text(try value.decode(String.self)) }
+    }
+    var text: String {
+        switch self { case .text(let value): return value; case .number(let value): return String(value) }
+    }
+}
+struct Preferences: Decodable { let locale: String; let notifications: Bool; let quietStart: Int; let quietEnd: Int }
+struct FarmMessage: Decodable, Identifiable {
+    let id: String
+    let role: String
+    let text: String
+    let audioId: String?
+    let status: String
+    let audioStatus: String?
+    let createdAt: String
+    let error: String?
+    let evidenceIds: [String]?
+    let proposedFacts: [String: FactValue]?
+}
+struct FarmTask: Decodable, Identifiable {
+    let id: String
+    let version: Int
+    let title: String
+    let reason: String
+    let status: String
+    let dueAt: String
+    let evidenceIds: [String]
+    let uncertainty: [String]
+    let fieldId: String
+    let cycleId: String
+}
+struct Evidence: Decodable, Identifiable {
+    let id: String
+    let source: String
+    let url: String
+    let retrievedAt: String
+    let observedAt: String?
+    let validUntil: String?
+    let title: String?
+    let passage: String?
+}
+struct FarmNotification: Decodable, Identifiable {
+    let id: String
+    let status: String
+    let title: String
+    let dueAt: String
+    let taskId: String?
+}
+struct MessageReceipt: Decodable { let messageId: String }
+struct AudioReceipt: Decodable { let audioId: String }
+struct APIError: Error, LocalizedError {
+    let status: Int
+    let code: String
+    let message: String
+    var errorDescription: String? {
+        switch status {
+        case 401, 403: return "இணைப்பு அனுமதியைச் சரிபார்க்கவும். மீண்டும் இணைக்கவும்."
+        case 409: return "விவரங்கள் மாறியுள்ளன. புதிய விவரங்களைப் பார்த்து மீண்டும் உறுதி செய்யவும்."
+        case 503: return "சேவை இப்போது கிடைக்கவில்லை. உங்கள் செய்தியை மீண்டும் முயற்சிக்கலாம்."
+        default: return tamilServiceError(code)
+        }
+    }
+}
+func tamilServiceError(_ code: String) -> String {
+    switch code {
+    case "claude_unconfigured", "model_unavailable":
+        return "பதில் தயாரிக்கும் சேவை இப்போது கிடைக்கவில்லை. உங்கள் செய்தி சேமிக்கப்பட்டுள்ளது. பின்னர் மீண்டும் முயற்சிக்கலாம்."
+    case "audio_missing":
+        return "உங்கள் ஒலிப்பதிவு கிடைக்கவில்லை. மீண்டும் பதிவு செய்து புதிய செய்தியாக அனுப்பவும்."
+    case "invalid_model_output", "invalid_specialist_output":
+        return "கிடைத்த தகவலை உறுதி செய்ய முடியவில்லை. இன்னும் வழிகாட்டல் வழங்கப்படவில்லை. மீண்டும் முயற்சிக்கலாம்."
+    case "busy":
+        return "முந்தைய செய்திகளுக்குப் பதில் தயாராகிறது. சிறிது நேரம் காத்திருக்கவும்."
+    default:
+        return "செயலாக்கத்தை முடிக்க முடியவில்லை. பின்னர் மீண்டும் முயற்சிக்கலாம்."
+    }
+}
+func tamilStatus(_ status: String) -> String {
+    switch status {
+    case "queued": return "வரிசையில் உள்ளது"
+    case "processing": return "பதில் தயாராகிறது"
+    case "ready": return "தயார்"
+    case "failed": return "மீண்டும் முயற்சிக்கவும்"
+    case "unconfigured": return "ஒலி சேவை இன்னும் இணைக்கப்படவில்லை"
+    case "pending": return "ஒலி தயாராகிறது"
+    case "proposed": return "உங்கள் முடிவுக்காக"
+    case "approved": return "செய்ய ஒப்புக்கொண்டீர்கள்"
+    case "completed": return "செய்ததாகப் பதிவு செய்தீர்கள்"
+    case "postponed": return "ஒத்திவைக்கப்பட்டது"
+    case "rejected": return "வேண்டாம் என்று கூறினீர்கள்"
+    case "superseded": return "புதிய தகவலால் மாற்றப்பட்டது"
+    case "accepted": return "பயன்பாட்டில் சேர்க்கப்பட்டது"
+    case "dispatching": return "அனுப்புகிறது"
+    case "uncertain": return "அனுப்பிய நிலையை உறுதி செய்ய வேண்டும்"
+    case "cancelled": return "ரத்து செய்யப்பட்டது"
+    case "expired": return "காலம் கடந்துவிட்டது"
+    default: return status
+    }
+}
+func displayDate(_ value: String) -> String {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let date = formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+    guard let date else { return value }
+    let output = DateFormatter()
+    output.locale = Locale(identifier: "ta_IN")
+    output.dateStyle = .medium
+    output.timeStyle = .short
+    return output.string(from: date)
+}

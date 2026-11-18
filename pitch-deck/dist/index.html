@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#F8F7F2">
+  <meta name="description" content="A ten-slide showcase of the Kalani prototype, its architecture and verified engineering progress.">
+  <title>Kalani · A Farmer's Assistant</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#presentation">Skip to presentation</a>
+  <header class="site-header">
+    <a href="#intro" class="project-name">Kalani</a>
+    <span class="deck-meta">Project showcase <span aria-hidden="true">/</span> 5 minutes</span>
+  </header>
+  <main id="presentation" tabindex="-1">
+    <article id="slide" class="slide" aria-labelledby="slide-title" aria-busy="true">
+      <div class="loading">Loading the presentation…</div>
+    </article>
+    <nav class="deck-navigation" aria-label="Presentation navigation">
+      <div id="slide-links" class="slide-links" aria-label="Slides"></div>
+      <div class="navigation-actions">
+        <span id="counter" class="counter" aria-label="Slide number">01 / 10</span>
+        <button id="previous" class="nav-button previous" type="button" disabled aria-label="Previous slide">Previous</button>
+        <button id="next" class="nav-button next" type="button" disabled aria-label="Next slide">Next <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>
+      </div>
+    </nav>
+    <details class="notes" id="notes">
+      <summary>Presenter notes and sources <span id="timing"></span></summary>
+      <div class="notes-content">
+        <p id="presenter-notes"></p>
+        <div><h2>Implementation sources</h2><ul id="sources"></ul></div>
+      </div>
+    </details>
+    <p class="keyboard-hint">Use the left and right arrow keys to move between slides.</p>
+    <p id="announcement" class="visually-hidden" aria-live="polite" aria-atomic="true"></p>
+  </main>
+</body>
+</html>

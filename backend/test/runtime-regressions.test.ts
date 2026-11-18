@@ -1,0 +1,165 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, rm, access } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
+import { BACKGROUND_CONTEXT as ctx } from '@earendil-works/chord/context';
+import { SPEECH_TEXT_LIMIT } from '../src/adapters.js';
+import { openFarmRuntime, type FarmRuntime, type RuntimeOptions } from '../src/runtime.js';
+import { FarmDoc, publicState } from '../src/domain.js';
+import { fixtures, owner, seed, waitState } from './support/fixtures.js';
+import { testPiModel } from './support/pi-model.js';
+async function withApp(run:(app:FarmRuntime,directory:string)=>Promise<void>, options:Partial<RuntimeOptions>={}){
+ const directory=await mkdtemp('/private/tmp/farm-regression-test-');const app=await openFarmRuntime(fixtures(directory,options));
+ try{await run(app,directory);}finally{await app.close();await rm(directory,{recursive:true,force:true});}
+}
+
+for(const kind of ['guidance','refusal'] as const)test(`chemical quantities in ${kind} narrative become a deterministic refusal before publication`,async()=>{
+ const base=fixtures('/unused').testReasoner!;
+ await withApp(async app=>{
+  await seed(app);await app.submit(owner,{requestId:`chemical-${kind}-001`,text:'மருந்து பற்றி கேள்வி'});
+  const state=await waitState(app,s=>s.messages.some(m=>m.role==='assistant'&&m.audioStatus==='ready'));
+  const answer=state.messages.find(m=>m.role==='assistant')!;
+  assert.match(answer.text,/உறுதி செய்ய முடியவில்லை/);assert.ok(!answer.text.includes('250'));assert.equal(state.tasks.length,0);
+  assert.ok(state.events.some(e=>e.type==='plan.refusal'));assert.deepEqual(answer.evidenceIds,[]);
+ },{testReasoner:async(role,packet)=>role==='main'?JSON.stringify({kind,text:'பூச்சிக்கொல்லி மருந்து 250 ml பயன்படுத்தவும்.',evidenceIds:['synthetic-weather'],missingFacts:[],uncertainty:[],tasks:[]}):base(role,packet)});
+});
+
+test('postponed task needs a new proposal for approval but still accepts an independent completion report',async()=>withApp(async app=>{
+ await seed(app);await app.submit(owner,{requestId:'postpone-message-001',text:'திட்டம்'});
+ const state=await waitState(app,s=>s.tasks.length===1);const task=state.tasks[0]!;
+ await app.decision(owner,task.id,{requestId:'postpone-decision-001',version:1,decision:'postponed'});
+ await assert.rejects(app.decision(owner,task.id,{requestId:'reapprove-postponed-01',version:1,decision:'approved'}),{code:'closed_task'});
+ await app.decision(owner,task.id,{requestId:'completed-postponed-01',version:1,decision:'completed'});
+ const latest=await app.state(owner);assert.equal(latest.tasks[0]!.status,'completed');assert.equal(latest.decisions.filter(d=>d.decision==='approved').length,0);assert.equal(latest.experiences[0]!.origin,'farmer_reported');assert.equal(latest.notifications.length,0);
+}));
+
+test('account deletion joins blocked synthesis and prevents media recreation or later uploads',{timeout:10000},async()=>{
+ let entered!:()=>void,release!:()=>void;const reached=new Promise<void>(r=>entered=r),gate=new Promise<void>(r=>release=r);
+ const defaultSpeech=fixtures('/unused').speech!;
+ await withApp(async(app,directory)=>{
+  await seed(app);const recording=await app.upload(owner,'deletion-recording-01',Buffer.from('SYNTHETIC PRIVATE RECORDING'),'audio/wav');
+  const cid=await app.ensureFarmer(owner);await app.submit(owner,{requestId:'deletion-synthesis-01',text:'திட்டம்'});await reached;
+  const removal=app.remove(owner,'delete-account-001');
+  try{
+   for(let i=0;i<100;i++){if((await app.harness.snapshot(FarmDoc,cid,ctx))?.deleted)break;await delay(5);}
+   assert.equal((await app.harness.snapshot(FarmDoc,cid,ctx))?.deleted,true);
+  }finally{release();}
+  await removal;
+  await assert.rejects(app.state(owner),{code:'account_deleted'});
+  await assert.rejects(app.upload(owner,'upload-after-delete-01',Buffer.from('LATER SYNTHETIC AUDIO'),'audio/wav'),{code:'account_deleted'});
+  await assert.rejects(app.audio.read(owner,recording),{code:'ENOENT'});
+  await assert.rejects(access(join(directory,'audio',createHash('sha256').update(owner).digest('hex'))),{code:'ENOENT'});
+  assert.deepEqual((await app.harness.snapshot(FarmDoc,cid,ctx))?.media,{});
+ },{speech:{...defaultSpeech,synthesize:async()=>{entered();await gate;return {audio:Buffer.from('SYNTHETIC LATE SYNTHESIS'),mime:'audio/wav'};}}});
+});
+
+test('farmer projection excludes workflow identifiers and scheduler prompt scaffolding',async()=>withApp(async app=>{
+ await seed(app);await app.submit(owner,{requestId:'projection-message-01',text:'திட்டம்'});
+ const state=await waitState(app,s=>s.tasks.length===1);state.messages.push({id:'synthetic-daily-scaffold',role:'assistant',text:'INTERNAL SYNTHETIC SCHEDULER PROMPT',status:'queued',createdAt:new Date().toISOString(),contextVersion:1,trigger:'scheduled',workflowId:42});
+ const visible=publicState(state);
+ assert.ok(!('scheduleRevision'in visible));assert.ok(!('traces'in visible));assert.ok(visible.messages.every(m=>!('workflowId'in m)&&!('trigger'in m)));
+ assert.ok(visible.tasks.every(t=>!('waitTaskId'in t)));assert.ok(!JSON.stringify(visible).includes('INTERNAL SYNTHETIC SCHEDULER PROMPT'));
+}));
+
+for(const defect of ['string fields','trailing prose'] as const)test(`Pi repairs a specialist response with ${defect} once before publication`,async()=>{
+ const question='இந்த வாரம் மழை பெய்யுமா?';
+ const valid={summary:'Synthetic weather finding',evidenceIds:['synthetic-weather'],applicability:'Synthetic field only',missingFacts:[],uncertainty:['Synthetic fixture']};
+ const broken={...valid,missingFacts:'None',uncertainty:'Synthetic fixture'};
+ const initial='\x60\x60\x60json\n'+JSON.stringify(broken)+'\n\x60\x60\x60'+(defect==='trailing prose'?'\nSynthetic prose outside the JSON.':'');
+ const prompts:string[]=[];
+ const model=testPiModel(undefined,prompt=>{prompts.push(prompt);return prompts.length===1?initial:JSON.stringify(valid);});
+ await withApp(async app=>{
+  await seed(app);const id=await app.submit(owner,{requestId:`malformed-specialist-${defect}`.replaceAll(' ','-'),text:question});
+  const state=await waitState(app,s=>s.messages.some(m=>m.status==='failed'||m.audioStatus==='ready'));
+  assert.equal(state.messages.find(m=>m.id===id)?.status,'ready');
+  assert.equal(state.messages.find(m=>m.id===`reply-${id}`)?.audioStatus,'ready');
+  assert.equal(prompts.length,2);assert.ok(prompts[0]!.includes(question));
+  assert.ok(model.requests.some(r=>r.toolNames.includes('confirmed_farm_context')));
+ },{models:model.models,modelId:model.modelId,modelConfigured:true,testReasoner:undefined});
+});
+
+test('a persistently malformed specialist fails with a classified error after one repair',async()=>{
+ let replies=0;
+ const model=testPiModel(undefined,()=>{replies++;return 'synthetic non-JSON response';});
+ await withApp(async app=>{
+  await seed(app);const id=await app.submit(owner,{requestId:'malformed-specialist-exhausted',text:'வானிலை'});
+  const state=await waitState(app,s=>s.messages.some(m=>m.status==='failed'));
+  const message=state.messages.find(m=>m.id===id)!;
+  assert.equal(message.error,'invalid_specialist_output');
+  const task=await app.harness.waitForTask(message.workflowId! as Parameters<typeof app.harness.waitForTask>[0],ctx);
+  assert.deepEqual(task.state.outcome,{status:'failed',error:{message:'invalid_specialist_output',detail:{phase:'specialists',reason:'json'}}});
+  assert.equal(replies,2);assert.equal(state.tasks.length,0);
+  assert.equal(state.messages.some(m=>m.role==='assistant'),false);
+  assert.equal(model.requests.some(r=>r.toolNames.includes('confirmed_farm_context')),false);
+ },{models:model.models,modelId:model.modelId,modelConfigured:true,testReasoner:undefined});
+});
+
+test('a specialist cannot cite evidence assigned only to a different role',async()=>{
+ const at=new Date().toISOString(),until=new Date(Date.now()+3600000).toISOString();let mainCalls=0,weatherCalls=0;
+ await withApp(async app=>{
+  await seed(app);await app.submit(owner,{requestId:'wrong-role-evidence-01',text:'திட்டம்'});
+  const state=await waitState(app,s=>s.messages.some(m=>m.role==='farmer'&&m.status==='failed'));
+  assert.equal(state.messages[0]!.error,'invalid_specialist_output');assert.equal(state.tasks.length,0);assert.equal(state.messages.filter(m=>m.role==='assistant').length,0);assert.equal(mainCalls,0);assert.equal(weatherCalls,1);
+ },{catalogue:[{kind:'crop',reviewStatus:'reviewed',reviewer:'SYNTHETIC reviewer',reviewedAt:at,validFrom:at,validUntil:until,evidence:{id:'synthetic-crop-only',source:'SYNTHETIC TNAU catalogue fixture',url:'https://agritech.tnau.ac.in/synthetic-test-only',title:'Synthetic crop source',retrievedAt:at,validUntil:until,status:'current',scope:{crop:'நெல்'},units:{},data:{synthetic:true},passage:'SYNTHETIC test crop evidence, never production guidance.'}}],testReasoner:async(role)=>{
+  if(role==='main')mainCalls++;
+  if(role==='weather')weatherCalls++;
+  return JSON.stringify({summary:'Synthetic misplaced evidence',evidenceIds:['synthetic-crop-only'],applicability:'Synthetic',missingFacts:[],uncertainty:[]});
+ }});
+});
+
+test('reconciliation repairs oversized text and a speech failure preserves the cited text for audio retry',async()=>{
+ const fixture=fixtures('/unused');let mainCalls=0,speechCalls=0;
+ const answer='இந்த வாரம் மழை பெய்ய வாய்ப்புள்ளது.';
+ await withApp(async app=>{
+  await seed(app);const id=await app.submit(owner,{requestId:'speech-fallback-message',text:'இந்த வாரம் மழை பெய்யுமா?'});
+  const replyId=`reply-${id}`;
+  let state=await waitState(app,s=>s.messages.some(m=>m.id===replyId&&m.audioStatus==='failed'));
+  let reply=state.messages.find(m=>m.id===replyId)!;
+  assert.equal(reply.text,answer);assert.equal(reply.status,'ready');assert.equal(reply.audioId,undefined);
+  assert.deepEqual(reply.evidenceIds,['synthetic-weather']);assert.equal(state.tasks.length,0);
+  await app.retryAudio(owner,replyId,'speech-fallback-retry');
+  state=await waitState(app,s=>s.messages.some(m=>m.id===replyId&&m.audioStatus==='ready'));
+  reply=state.messages.find(m=>m.id===replyId)!;
+  assert.ok(reply.audioId);assert.equal(reply.text,answer);
+  assert.equal(mainCalls,2);assert.equal(speechCalls,2);
+ },{testReasoner:async(role,packet)=>{
+  if(role!=='main')return fixture.testReasoner!(role,packet);
+  mainCalls++;
+  return JSON.stringify({kind:'guidance',text:mainCalls===1?'ம'.repeat(SPEECH_TEXT_LIMIT+1):answer,evidenceIds:['synthetic-weather'],missingFacts:[],uncertainty:[],tasks:[]});
+ },speech:{...fixture.speech!,synthesize:async text=>{
+  assert.equal(text,answer);
+  if(++speechCalls===1)throw new Error('Synthetic synthesis outage');
+  return {audio:Buffer.from('SYNTHETIC SPEECH RETRY BYTES'),mime:'audio/wav'};
+ }}});
+});
+
+test('prototype-shaped request IDs, farmer IDs, facts and media lookups cannot bypass ownership',async()=>withApp(async app=>{
+ for(const key of ['__proto__','constructor','prototype']){
+  await assert.rejects(app.state(key),{code:'invalid_owner'});
+  await assert.rejects(app.submit(owner,{requestId:key,text:'சோதனை'}),{code:'invalid_request_id'});
+  await assert.rejects(app.getAudio(owner,key),{code:'not_found'});
+ }
+ const malicious=JSON.parse('{"__proto__":{"polluted":true}}');
+ await assert.rejects(app.facts(owner,{requestId:'proto-facts-0001',expectedVersion:0,fieldId:'field-1',cycleId:'cycle-1',facts:malicious}),{code:'invalid_fact'});
+ assert.deepEqual((await app.state(owner)).facts,{});assert.equal(Object.prototype.hasOwnProperty.call({},'polluted'),false);
+}));
+
+test('public weather snapshots reuse exact coordinates across farmers without sharing private facts and refresh after expiry',async()=>{
+ let clock=Date.now(),fetches=0;const packets:{role:string;packet:string}[]=[];
+ await withApp(async app=>{
+  await seed(app,owner);await seed(app,'private-second-farmer',{crop:'பருத்தி',village:'PRIVATE SECOND FARMER VILLAGE',latitude:10.79,longitude:79.14});
+  await app.submit(owner,{requestId:'cached-weather-first',text:'வானிலை'});await waitState(app,s=>s.messages.some(m=>m.role==='assistant'&&m.audioStatus==='ready'));
+  await app.submit('private-second-farmer',{requestId:'cached-weather-second',text:'வானிலை'});await waitState(app,s=>s.messages.some(m=>m.role==='assistant'&&m.audioStatus==='ready'),'private-second-farmer');
+  assert.equal(fetches,1);assert.ok(!JSON.stringify(await app.state(owner)).includes('PRIVATE SECOND FARMER VILLAGE'));
+  const firstPacket=packets.find(p=>p.role==='main')!;assert.ok(!firstPacket.packet.includes('PRIVATE SECOND FARMER VILLAGE'));
+  clock+=2000;
+  await app.submit(owner,{requestId:'cached-weather-expired',text:'புதிய வானிலை'});await waitState(app,s=>s.messages.filter(m=>m.role==='assistant'&&m.audioStatus==='ready').length===2);
+  assert.equal(fetches,2);
+ },{now:()=>clock,weather:async(location)=>{fetches++;return {status:'available',evidence:[{id:`synthetic-cached-weather-${fetches}`,source:'SYNTHETIC cached weather',url:'https://example.invalid/synthetic-cache',title:'Synthetic public weather',retrievedAt:new Date(clock).toISOString(),validUntil:new Date(clock+1000).toISOString(),status:'current',scope:location,units:{rain:'mm'},data:{synthetic:true,rain:1}}]};},testReasoner:async(role,packet)=>{
+  packets.push({role,packet});
+  if(role!=='main'){const data=JSON.parse(packet);return JSON.stringify({summary:'Synthetic weather source',evidenceIds:data.evidence.map((e:{id:string})=>e.id),applicability:'Synthetic coordinates',missingFacts:[],uncertainty:[]});}
+  return JSON.stringify({kind:'clarification',text:'இது சோதனை. உங்கள் நிலத்தின் நிலையைத் தெரிவிக்கவும்.',evidenceIds:[],missingFacts:['observation'],uncertainty:[],tasks:[]});
+ }});
+});
