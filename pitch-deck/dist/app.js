@@ -94,7 +94,7 @@ function content(item) {
     region.append(stat, checks);
   } else if (item.layout === 'status') {
     const table = element('table', 'status-table');
-    const caption = element('caption', 'visually-hidden', 'Built capabilities, remaining validation and next milestones');
+    const caption = element('caption', 'visually-hidden', item.title);
     const thead = element('thead');
     const header = element('tr');
     item.columns.forEach(column => {
@@ -149,7 +149,18 @@ function render() {
   });
   document.querySelector('#presenter-notes').textContent = item.notes;
   document.querySelector('#timing').textContent = `${item.seconds} seconds`;
-  document.querySelector('#sources').replaceChildren(...item.sources.map(source => element('li', '', source)));
+  document.querySelector('#sources').replaceChildren(...item.sources.map(source => {
+    const row = element('li');
+    const url = source.match(/https?:\/\/\S+/)?.[0];
+    if (url) {
+      const link = element('a', '', source.slice(0, source.indexOf(url)).replace(/:\s*$/, '') || url);
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      row.append(link);
+    } else row.textContent = source;
+    return row;
+  }));
   document.querySelector('#announcement').textContent = `Slide ${current + 1} of ${deck.slides.length}: ${item.title.replace(/\n/g, ' ')}`;
   document.title = item.layout === 'cover' ? `${deck.title} · ${item.subtitle}` : `${item.title.replace(/\n/g, ' ')} · ${deck.title}`;
 }

@@ -24,10 +24,12 @@ struct MessageDraft: Codable {
     var audioConsent = false
     var selectedTab = 0
     var selectedTaskID: String?
+    var calendarDay = farmCalendar.startOfDay(for: .now)
     var locale = UserDefaults.standard.string(forKey: "farmLanguage") ?? "ta-IN"
     var languageChosen = UserDefaults.standard.string(forKey: "farmLanguage") != nil || UserDefaults.standard.bool(forKey: "selectedTamil")
     private(set) var pendingLanguage = UserDefaults.standard.string(forKey: "pendingFarmLanguage")
     private var acceptedSequence = -1
+    private var languageRequest: (choice: String, id: String)?
     init() {
         #if DEBUG
         let environment = ProcessInfo.processInfo.environment
@@ -58,17 +60,38 @@ struct MessageDraft: Codable {
     }
     var recordingURL: URL { localDirectory.appendingPathComponent("draft.m4a") }
     var needsOnboarding: Bool { state?.facts["crop"] == nil || state?.facts["village"] == nil }
-    func localized(_ tamil: String, _ english: String) -> String { locale == "en-IN" ? english : tamil }
+    static let languageNames = ["en-IN": "English", "ta-IN": "தமிழ்", "kn-IN": "ಕನ್ನಡ", "ml-IN": "മലയാളം", "te-IN": "తెలుగు"]
+    var enabledLanguages: [String] {
+        (state?.enabledLanguages ?? ["en-IN", "ta-IN"]).filter { Self.languageNames[$0] != nil }
+    }
+    func localized(_ tamil: String, _ english: String) -> String {
+        if locale == "ta-IN" { return tamil }
+        return PilotLocalization.text(english, locale: locale) ?? english
+    }
     func chooseInitialLanguage(_ choice: String) {
         pendingLanguage = choice
         UserDefaults.standard.set(choice, forKey: "pendingFarmLanguage")
         rememberLanguage(choice)
     }
     func setLanguage(_ choice: String) async {
-        guard ["ta-IN", "en-IN"].contains(choice), state != nil else { return }
-        if await mutate("/v1/preferences", method: "PATCH", body: ["requestId": UUID().uuidString, "locale": choice]) {
+        guard let client, !busy, state != nil, enabledLanguages.contains(choice),
+              choice != state?.preferences.locale || pendingLanguage != nil else { return }
+        let requestId = languageRequest?.choice == choice ? languageRequest?.id ?? UUID().uuidString : UUID().uuidString
+        languageRequest = (choice, requestId)
+        let identity = sessionID
+        busy = true
+        defer { busy = false }
+        do {
+            let data = try await client.data("/v1/preferences", method: "PATCH", body: ["requestId": requestId, "locale": choice])
+            let updated = try JSONDecoder().decode(FarmerState.self, from: data)
+            guard identity == sessionID else { return }
             clearPendingLanguage()
-            rememberLanguage(choice)
+            accept(updated)
+            languageRequest = nil
+            error = nil
+        } catch {
+            guard identity == sessionID else { return }
+            self.error = localized("மொழியை மாற்ற முடியவில்லை. மீண்டும் முயற்சிக்கவும்.", "Could not change the language. Select it again to retry.")
         }
     }
     private func clearPendingLanguage() {
@@ -76,7 +99,8 @@ struct MessageDraft: Codable {
         UserDefaults.standard.removeObject(forKey: "pendingFarmLanguage")
     }
     private func rememberLanguage(_ choice: String) {
-        locale = choice == "en-IN" ? choice : "ta-IN"
+        guard Self.languageNames[choice] != nil else { return }
+        locale = choice
         languageChosen = true
         UserDefaults.standard.set(locale, forKey: "farmLanguage")
     }
@@ -96,6 +120,8 @@ struct MessageDraft: Codable {
         UserDefaults.standard.set(self.baseURL, forKey: "serverURL")
         state = nil
         acceptedSequence = -1
+        languageRequest = nil
+        calendarDay = farmCalendar.startOfDay(for: .now)
         sessionID = UUID()
         loadDraft()
     }
@@ -124,17 +150,37 @@ struct MessageDraft: Codable {
         do {
             let updated = try await client.getState()
             guard identity == sessionID, !Task.isCancelled else { return }
-            if updated.sequence >= acceptedSequence {
-                acceptedSequence = updated.sequence
-                state = updated
-                if languageChosen && pendingLanguage == nil && locale != updated.preferences.locale {
-                    rememberLanguage(updated.preferences.locale)
-                }
-            }
+            accept(updated)
             connected = true
         } catch {
             if identity == sessionID && !Task.isCancelled { connected = false; self.error = message(for: error) }
         }
+    }
+    private func accept(_ updated: FarmerState) {
+        guard updated.sequence >= acceptedSequence else { return }
+        acceptedSequence = updated.sequence
+        state = updated
+        if let pendingLanguage, !enabledLanguages.contains(pendingLanguage) {
+            clearPendingLanguage()
+        }
+        if languageChosen && pendingLanguage == nil && locale != updated.preferences.locale {
+            rememberLanguage(updated.preferences.locale)
+        }
+    }
+    func showCalendar(on date: Date) {
+        calendarDay = farmCalendar.startOfDay(for: date)
+        selectedTab = 2
+    }
+    func calendarAction(_ action: String, for entry: CalendarEntry, dueAt: Date? = nil) async -> Bool {
+        let time = dueAt.map { ISO8601DateFormatter().string(from: $0) }
+        let intent = "\(entry.id)/\(entry.version)/\(action)/\(time ?? "")"
+        let requestId = SHA256.hash(data: Data(intent.utf8)).map { String(format: "%02x", $0) }.joined()
+        var body: [String: Any] = [
+            "requestId": requestId,
+            "version": entry.version, "action": action
+        ]
+        if let time { body["dueAt"] = time }
+        return await mutate("/v1/calendar/\(entry.id)/actions", body: body)
     }
     func mutate(_ path: String, method: String = "POST", body: [String: Any]) async -> Bool {
         guard let client, !busy else { return false }
@@ -233,10 +279,19 @@ struct MessageDraft: Codable {
         token = ""
         draft = MessageDraft()
         acceptedSequence = -1
+        languageRequest = nil
+        calendarDay = farmCalendar.startOfDay(for: .now)
         sessionID = UUID()
     }
     func message(for error: Error) -> String {
         if let error = error as? APIError {
+            switch error.code {
+            case "calendar_time_conflict":
+                return localized("அந்த நேரத்தில் வேறு வேலை உள்ளது. வேறு நேரத்தைத் தேர்ந்தெடுக்கவும்.", "Something is already scheduled then. Choose another time.")
+            case "invalid_calendar_time":
+                return localized("இனிமேல் வரும் தேதியையும் நேரத்தையும் தேர்ந்தெடுக்கவும்.", "Choose a future date and time.")
+            default: break
+            }
             switch error.status {
             case 401, 403: return localized("இணைப்பு அனுமதியைச் சரிபார்க்கவும். மீண்டும் இணைக்கவும்.", "Check your farm connection code and reconnect.")
             case 409: return localized("விவரங்கள் மாறியுள்ளன. புதிய விவரங்களைப் பார்த்து மீண்டும் உறுதி செய்யவும்.", "Details have changed. Review the latest details and confirm again.")

@@ -1,16 +1,18 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { defineDoc, type JsonObject } from '@earendil-works/pi-durable';
 import { DEFAULT_LOCALE, SPEECH_TEXT_LIMIT, type Evidence, type FarmLocale } from './adapters.js';
+import type { CalendarEntry } from './calendar.js';
+import { activeLanguage, enabledLanguages, hasLocaleScript } from './languages.js';
 
 export class AppError extends Error {
   constructor(public code: string, message: string, public status = 400) { super(message); }
 }
 export type FactValue = string | number;
-export type Message = { id: string; role: 'farmer' | 'assistant'; text: string; locale?: FarmLocale; audioId?: string; status: 'queued' | 'processing' | 'ready' | 'failed' | 'superseded'; audioStatus?: 'pending' | 'ready' | 'failed' | 'unconfigured'; createdAt: string; contextVersion: number; error?: string; evidenceIds?: string[]; workflowId?: number; attempt?: number; trigger?: 'farmer' | 'scheduled'; proposedFacts?: Record<string, FactValue> };
+export type Message = { id: string; role: 'farmer' | 'assistant'; text: string; locale?: FarmLocale; languageRevision?:number; calendarEntryId?:string; audioId?: string; status: 'queued' | 'processing' | 'ready' | 'failed' | 'superseded'; audioStatus?: 'pending' | 'ready' | 'failed' | 'unconfigured'; createdAt: string; contextVersion: number; error?: string; evidenceIds?: string[]; workflowId?: number; attempt?: number; trigger?: 'farmer' | 'scheduled'; proposedFacts?: Record<string, FactValue> };
 export type FarmTask = { id: string; version: number; contextVersion: number; fieldId: string; cycleId: string; title: string; reason: string; dueAt: string; validUntil: string; status: 'proposed' | 'approved' | 'postponed' | 'completed' | 'rejected' | 'superseded'; evidenceIds: string[]; uncertainty: string[]; waitTaskId?: number };
 export type Decision = { id: string; taskId: string; version: number; decision: 'approved' | 'postponed' | 'completed' | 'rejected'; actor: string; at: string; consumed: boolean };
 export type AppEvent = { sequence: number; type: string; at: string; reference?: string };
-export type Notification = { id: string; title: string; dueAt: string; expiresAt: string; taskId: string; version: number; contextVersion: number; status: 'pending' | 'dispatching' | 'accepted' | 'uncertain' | 'cancelled' | 'expired'; deliveryId: string; mode: 'in-app'; purpose?: 'task' | 'guidance'; messageId?: string; acceptedAt?: string };
+export type Notification = { id: string; title: string; dueAt: string; expiresAt: string; taskId: string; version: number; contextVersion: number; status: 'pending' | 'dispatching' | 'accepted' | 'uncertain' | 'cancelled' | 'expired'; deliveryId: string; mode: 'in-app'; purpose?: 'task' | 'guidance' | 'calendar'; messageId?: string; acceptedAt?: string };
 export type Playbook = { origin?: 'farmer_reported'; experienceIds?: string[]; sourceTaskId?: string; id: string; version: number; status: 'candidate' | 'reviewed' | 'withdrawn'; title: string; crop: string; fieldId: string; cycleId: string; prerequisites: Record<string, FactValue>; evidenceIds: string[]; steps: string[]; createdAt: string; validUntil: string; history: { version: number; at: string; note: string }[]; reviewer?: string };
 export type Improvement = { id: string; version: number; category: 'vocabulary' | 'routing' | 'retrieval' | 'prompt'; proposal: string; status: 'proposed' | 'evaluated' | 'released' | 'rejected'; baselineVersion: string; evaluatedVersion?: number; evidenceEventIds: number[]; evaluations: { suite: string; passed: boolean; at: string; report: string }[]; reviewer?: string; releasedAt?: string };
 export type EvidenceRecord = JsonObject & { id: string; source: string; url: string; retrievedAt: string; validUntil?: string; status: string };
@@ -18,7 +20,9 @@ export type FarmerState = {
  owner: string; version: number; fieldId: string; cycleId: string; facts: Record<string, FactValue>;
  contexts: Record<string, { facts: Record<string, FactValue>; version: number; fieldId: string; cycleId: string }>;
  preferences: { locale: FarmLocale; notifications: boolean; quietStart: number; quietEnd: number };
+ languageRevision?: number;
  messages: Message[]; tasks: FarmTask[]; evidence: EvidenceRecord[]; decisions: Decision[]; notifications: Notification[]; playbooks: Playbook[];
+ calendarEntries?: CalendarEntry[];
  experiences: { id: string; taskId: string; at: string; origin: 'farmer_reported'; text: string; fieldId: string; cycleId: string }[];
  memories: { key: string; value: FactValue; at: string; confirmedBy: string; contextVersion: number }[];
  proposals: Improvement[]; activeRelease: string; releaseHistory?: {id:string;proposalId:string;proposalVersion:number;previousRelease:string;reviewer:string;at:string;action:'release'|'rollback'}[];
@@ -72,9 +76,10 @@ export function correctFacts(state: FarmerState, input: { expectedVersion: numbe
  if(input.facts.crop !== undefined && input.facts.crop !== prior.crop) for(const key of ['sowingDate','transplantDate','datePrecision']) if(input.facts[key] === undefined) delete state.facts[key];
  state.fieldId = input.fieldId; state.cycleId = input.cycleId; state.version++;
  for (const [key,value] of Object.entries(input.facts)) state.memories.push({ key, value, at: iso(now), confirmedBy: state.owner, contextVersion: state.version });
+ for (const entry of state.calendarEntries ?? []) if (entry.status === 'draft') { entry.status = 'cancelled'; entry.version++; }
  for (const task of state.tasks) if (!['completed','rejected','superseded'].includes(task.status)) task.status = 'superseded';
  for (const message of state.messages) if (['queued','processing'].includes(message.status) || message.role === 'assistant') message.status = 'superseded';
- for (const notification of state.notifications) if (['pending','dispatching'].includes(notification.status)) notification.status = notification.status === 'dispatching' ? 'uncertain' : 'cancelled';
+ for (const notification of state.notifications) if (notification.purpose !== 'calendar' && ['pending','dispatching'].includes(notification.status)) notification.status = notification.status === 'dispatching' ? 'uncertain' : 'cancelled';
  event(state, 'facts.corrected', undefined, now);
 }
 export function taskApplicable(state: FarmerState, task: FarmTask, now = Date.now()) {
@@ -119,7 +124,6 @@ export function parseSpecialist(raw:string, evidence:readonly Evidence[]):Specia
  if(typeof p.summary!=='string'||!p.summary.trim()||typeof p.applicability!=='string'||!strings(p.missingFacts)||!strings(p.uncertainty))throw new ModelOutputError(code,'shape');
  return {summary:p.summary,evidenceIds:p.evidenceIds,applicability:p.applicability,missingFacts:p.missingFacts,uncertainty:p.uncertainty};
 }
-const hasLocaleScript = (text:string,locale:FarmLocale) => (locale==='ta-IN'?/[\u0B80-\u0BFF]/:/[A-Za-z]{2,}/).test(text);
 export function decodePlan(raw:string,locale:FarmLocale=DEFAULT_LOCALE):PlanOutput {
  const code='invalid_model_output';
  const p=outputObject(raw,code);
@@ -130,21 +134,21 @@ export function decodePlan(raw:string,locale:FarmLocale=DEFAULT_LOCALE):PlanOutp
 export function parsePlan(raw: string, evidence: readonly EvidenceRecord[], now = Date.now(),locale:FarmLocale=DEFAULT_LOCALE): PlanOutput {
  const p=decodePlan(raw,locale);
  if (p.proposedFacts) validateFacts(p.proposedFacts);
- const chemical = /dose|dosage|pesticid|fungicid|herbicid|fertili[sz]|spray|உரம்|மருந்து|தெளி|பூச்சிக்கொல்லி|ரசாயன/i;
- const amount = /[0-9௦-௯]|millilitr|kilogram|gram|ml|mg|litre|லிட்டர்|மில்லி|கிலோ|கிராம்|ஸ்பூன்/i;
- const allText = [p.text, ...p.tasks.map(t => `${t.title} ${t.reason}`)].join(' ');
- if (chemical.test(allText) && (p.kind !== 'refusal' || amount.test(allText))) throw new AppError('expert_review_required', 'Chemical advice cannot be verified in this release.', 502);
+ const chemical = /\b(?:dos(?:e[sd]?|ages?|ing)|(?:pesti|fungi|herbi)cides?|fertili[sz]\w*|spray\w*)\b|உரம்|உரத்தை|உரத்தின்|மருந்து|மருந்தை|தெளி(?!வ)|பூச்சிக்கொல்லி|ரசாயன/i;
+ const amount = /(?:[0-9௦-௯]|\b(?:half|one|two|three|four|five|six|seven|eight|nine|ten)(?:\s+an?)?)\s*-?\s*(?:%|(?:ml|mg|kg|g|l|millilit(?:er|re)s?|lit(?:er|re)s?|(?:kilo|milli)?grams?|(?:table|tea)?spoons?)\b|லிட்டர்|மில்லி|கிலோ|கிராம்|ஸ்பூன்)/i;
+ const directive = /(?:^|[.!?;:\n]|,\s*then)\s*(?:please\s+)?(?:apply|add|administer|mix|pour|use|give|spray)\b|\byou\s+(?:should|must|can)\s+(?:apply|add|administer|mix|pour|use|give|spray)\b|பயன்படுத்தவும்|இடவும்|கலக்கவும்|தெளிக்கவும்|ஊற்றவும்|போடவும்/i;
+ if (chemical.test(p.text) && (p.kind === 'guidance' || amount.test(p.text) || directive.test(p.text))) throw new AppError('expert_review_required', 'Chemical advice cannot be verified in this release.', 502);
  const ids = new Set(evidence.map(e => e.id));
  if (p.evidenceIds.some(id => !ids.has(id)) || (p.kind === 'guidance' && p.evidenceIds.length === 0) || (p.kind !== 'guidance' && p.tasks.length)) throw new AppError('unsupported_claim', 'Guidance has no matching source.', 502);
  for (const t of p.tasks) {
   if (!t.evidenceIds.length || !Number.isFinite(Date.parse(t.dueAt)) || Date.parse(t.dueAt) < now || Date.parse(t.dueAt) > now + 7*86400000 || t.evidenceIds.some(id => !evidence.some(e => e.id === id && e.status === 'current' && e.validUntil && Date.parse(e.validUntil) > Date.parse(t.dueAt)))) throw new AppError('invalid_task', 'A proposed task has expired or unsupported evidence.', 502);
   // v1 never schedules chemical interventions, even when a model supplies a citation.
-  if (/dose|pesticid|fungicid|herbicid|spray|dosage|உரம்|மருந்து|தெளி|பூச்சிக்கொல்லி|ரசாயன/i.test(`${t.title} ${t.reason}`)) throw new AppError('expert_review_required', 'Chemical interventions require reviewed expert guidance.', 502);
+  if (chemical.test(`${t.title} ${t.reason}`)) throw new AppError('expert_review_required', 'Chemical interventions require reviewed expert guidance.', 502);
  }
  return p;
 }
 export const storedEvidence = (e: Evidence) => json(e) as unknown as EvidenceRecord;
 export function publicState(state: FarmerState) {
- const { owner, requests, media, traces, proposals, contexts, deleted, scheduleRevision, messages, tasks, ...view } = state;
- return { ...view, messages: messages.filter(m => m.trigger !== 'scheduled').map(({workflowId,trigger,...m})=>m), tasks: tasks.map(({waitTaskId,...t})=>t) };
+ const { owner, requests, media, traces, proposals, contexts, deleted, scheduleRevision, languageRevision, messages, tasks, calendarEntries, ...view } = state;
+ return { ...view, calendarEntries: (calendarEntries ?? []).map(({localDate,minuteOfDay,...entry})=>entry), enabledLanguages: enabledLanguages(), preferences: {...view.preferences,locale:activeLanguage(view.preferences.locale)}, messages: messages.filter(m => m.trigger !== 'scheduled').map(({workflowId,trigger,languageRevision,...m})=>m), tasks: tasks.map(({waitTaskId,...t})=>t) };
 }

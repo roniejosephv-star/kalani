@@ -51,13 +51,15 @@ h1{font-size:clamp(34px,3.45vw,55px);font-weight:570;line-height:1.08;letter-spa
 .journey-steps .group,.control-steps .group{border-top:1px solid #9ab19a;padding-top:14px}
 .journey-steps .group h3{font-size:20px}
 .journey-steps .group p{font-size:16px}
+.journey-steps .group p{white-space:pre-line}
+.notes-content li{overflow-wrap:anywhere}
 .content-journey .focus-statement{display:flex;align-items:center;gap:30px}
 .content-journey .focus-statement p{font-size:clamp(25px,2.45vw,37px);font-family:"Tamil Sangam MN","Noto Sans Tamil",sans-serif;letter-spacing:0}
 .content-journey .focus-statement span{margin:0;flex:none}
 .content-control .focus-statement{max-width:850px}
 .content-control .focus-statement p{font-size:30px}
-.content-screens{display:grid;grid-template-columns:repeat(3,1fr);gap:30px;align-items:stretch;padding-top:22px;padding-bottom:22px;max-width:1100px;width:100%;margin:auto}
-.content-screens .product-screen img{height:clamp(250px,calc(100svh - 500px),500px);max-height:none;flex:none}
+.content-screens{display:grid;grid-template-columns:repeat(2,1fr);gap:70px;align-items:stretch;padding-top:22px;padding-bottom:22px;max-width:900px;width:100%;margin:auto}
+.content-screens .product-screen img{width:330px;height:clamp(250px,calc(100svh - 500px),500px);max-height:none;object-fit:cover;object-position:center 60%;flex:none}
 .branch-context{display:none}
 .content-architecture{justify-content:center}
 .architecture-flow{width:100%;display:grid;grid-template-columns:1fr 1.3fr 1.3fr;gap:32px 55px;align-items:stretch;position:relative}

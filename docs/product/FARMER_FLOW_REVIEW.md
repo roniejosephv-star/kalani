@@ -1,10 +1,10 @@
 # Tamil farmer screens and conversation review
 
-Status: interaction brief for review, not an implemented interface. Tamil strings are draft standard conversational Tamil and require native-speaker and farmer review before release. This brief follows BLUEPRINT.md; WhatsApp calls and price/yield prediction remain outside the first build.
+Status: interaction brief for review, not an implemented interface. Tamil strings are draft standard conversational Tamil and require native-speaker and farmer review before release. This brief follows [BLUEPRINT.md](../architecture/BLUEPRINT.md); WhatsApp calls and price/yield prediction remain outside the first build.
 
 UI refinement is deferred until the implementation-stack discussion. Use [PRD.md](PRD.md) and [PRODUCT_SPECIFICATIONS.md](PRODUCT_SPECIFICATIONS.md) as the current product requirements; this screen brief and its storyboard are exploratory references, not approval of final layouts or styling.
 
-Visual composition reference: [Tamil welcome, crop confirmation and Today](design-review/tamil-farmer-storyboard.png). This generated image shows three selected states, not the entire onboarding sequence. [Prompt and review limitations](design-review/STORYBOARD_PROMPT.md) preserve its provenance. It is not a functioning interface or an approved visual system.
+Visual composition reference: [Tamil welcome, crop confirmation and Today](../design/tamil-farmer-storyboard.png). This generated image shows three selected states, not the entire onboarding sequence. [Prompt and review limitations](../design/STORYBOARD_PROMPT.md) preserve its provenance. It is not a functioning interface or an approved visual system.
 
 ## 1. Experience and screen sequence
 

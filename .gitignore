@@ -9,3 +9,8 @@ DerivedData/
 xcuserdata/
 .DS_Store
 pitch-deck/.openai/
+exports/
+.private-transfer/
+.xcodebuildmcp/
+*.xcresult/
+*.xctestproducts/

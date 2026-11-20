@@ -1,8 +1,8 @@
 # Tamil farm assistant product and technical blueprint
 
-Status: historical product blueprint, updated 17 November 2026 for the approved Pi Durable architecture. PRD.md and PRODUCT_SPECIFICATIONS.md are authoritative; implementation and acceptance evidence are recorded separately. Earlier web-app/PostgreSQL and FastAPI proposals are superseded.
+Status: historical product blueprint, updated 17 November 2026 for the approved Pi Durable architecture. [PRD.md](../product/PRD.md) and [PRODUCT_SPECIFICATIONS.md](../product/PRODUCT_SPECIFICATIONS.md) are authoritative; implementation and acceptance evidence are recorded separately. Earlier web-app/PostgreSQL and FastAPI proposals are superseded.
 
-Current product scope is governed by [PRD.md](PRD.md) and behaviour by [PRODUCT_SPECIFICATIONS.md](PRODUCT_SPECIFICATIONS.md). This earlier blueprint remains a research/design reference. Its React/web/database/provider suggestions are unselected options. The user has deferred UI refinement until the implementation-stack discussion; the storyboard is not an approved design.
+Current product scope is governed by [PRD.md](../product/PRD.md) and behaviour by [PRODUCT_SPECIFICATIONS.md](../product/PRODUCT_SPECIFICATIONS.md). This earlier blueprint remains a research/design reference. Its React/web/database/provider suggestions are unselected options. The user has deferred UI refinement until the implementation-stack discussion; the storyboard is not an approved design.
 
 ## 1. Product and farmer journey
 
@@ -149,7 +149,7 @@ Use hosted Tamil STT/TTS for the initial build, provisionally Sarvam pending an 
 
 ### Approved build architecture
 
-Use the selected native SwiftUI iPhone client and one TypeScript backend embedding Pi Durable 1.5.2, Pi’s Anthropic provider and Pi SQLite application storage. Enforce one writer, verify `synchronous=FULL` before runtime startup, and keep audio in private files published only after complete writes. Do not add PostgreSQL, Redis or a separate workflow engine. The full authoritative runtime, domain, learning and API requirements are in section 10 of PRODUCT_SPECIFICATIONS.md.
+Use the selected native SwiftUI iPhone client and one TypeScript backend embedding Pi Durable 1.5.2, Pi’s Anthropic provider and Pi SQLite application storage. Enforce one writer, verify `synchronous=FULL` before runtime startup, and keep audio in private files published only after complete writes. Do not add PostgreSQL, Redis or a separate workflow engine. The full authoritative runtime, domain, learning and API requirements are in section 10 of [PRODUCT_SPECIFICATIONS.md](../product/PRODUCT_SPECIFICATIONS.md).
 
 The pinned package provides checkpointed tasks and timers but no signal API. A durable, exact-version farmer decision inbox is checked by sleeping tasks within 30 seconds, without keeping model calls open. Preserve reviewed extension versions for unfinished tasks and require restart recovery tests before demo acceptance.
 

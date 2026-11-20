@@ -85,14 +85,29 @@ async function provision(owner: string, directory: string, outputFile: string | 
   else process.stdout.write(`${token}\n`);
 }
 
-function filteredTrace(state: FarmerState) {
+const traceStages = new Set(['route', 'collect', 'specialist', 'assess', 'reconcile', 'publish', 'audio']);
+const traceRoutes = new Set(['weather', 'calendar', 'crop', 'market', 'opportunities']);
+const traceOutcomes = new Set([
+  'selected', 'clarification', 'supported', 'missing_farm_fact', 'no_match', 'not_configured',
+  'provider_unavailable', 'skipped', 'completed', 'unavailable', 'followup', 'ready',
+  'budget_exhausted', 'guidance', 'refusal', 'failed', 'unconfigured',
+]);
+
+export function filteredTrace(state: FarmerState) {
   return state.traces.map(trace => {
     let raw: Record<string, unknown> = {};
     try { const parsed = JSON.parse(trace.summary); if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) raw = parsed; } catch { /* Malformed legacy contributions are omitted. */ }
     const contribution: Record<string, unknown> = {};
     for (const key of ['kind', 'summary', 'applicability']) if (typeof raw[key] === 'string') contribution[key] = raw[key].slice(0, 2000);
     for (const key of ['missingFacts', 'uncertainty']) if (Array.isArray(raw[key])) contribution[key] = raw[key].filter((value): value is string => typeof value === 'string').slice(0, 20).map(value => value.slice(0, 1200));
-    return { role: trace.role, at: trace.at, messageId: trace.messageId, contextVersion: trace.contextVersion, evidenceIds: trace.evidenceIds, contribution };
+    const workflow = {
+      ...(typeof raw.stage === 'string' && traceStages.has(raw.stage) && { stage: raw.stage }),
+      ...(typeof raw.outcome === 'string' && traceOutcomes.has(raw.outcome) && { outcome: raw.outcome }),
+      ...((raw.round === 0 || raw.round === 1) && { round: raw.round }),
+      ...(typeof raw.durationMs === 'number' && Number.isFinite(raw.durationMs) && raw.durationMs >= 0 && { durationMs: raw.durationMs }),
+      ...(Array.isArray(raw.routes) && { routes: raw.routes.filter((route): route is string => typeof route === 'string' && traceRoutes.has(route)).slice(0, 5) }),
+    };
+    return { role: trace.role, at: trace.at, messageId: trace.messageId, contextVersion: trace.contextVersion, evidenceIds: trace.evidenceIds, ...workflow, contribution };
   });
 }
 

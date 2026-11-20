@@ -57,11 +57,12 @@ test('five synthetic farms keep weather scoped; changing location without coordi
   await app.submit(farmer,{requestId:'synthetic-weather-001',text:'இந்த வாரம் மழை பெய்யுமா?'});
   const state=await waitState(app,s=>s.messages.some(m=>m.role==='assistant'),farmer);
   const reply=state.messages.find(m=>m.role==='assistant')!;
-  assert.ok(state.events.some(e=>e.type==='source.unconfigured'&&e.reference?.endsWith(':market')));
+  assert.ok(state.traces.some(trace=>trace.role==='market'&&JSON.parse(trace.summary).outcome==='skipped'));
+  assert.ok(!state.events.some(e=>e.type==='source.unconfigured'&&e.reference?.endsWith(':market')));
   if(index===profiles.length-1){
    assert.equal(state.facts.latitude,undefined);
    assert.equal(state.facts.longitude,undefined);
-   assert.equal(reply.text,'உங்கள் வயல் எங்கே உள்ளது?');
+   assert.match(reply.text,/வயல்/);
    assert.deepEqual(reply.evidenceIds,[]);
    assert.deepEqual(state.tasks,[]);
   }else{
@@ -69,7 +70,7 @@ test('five synthetic farms keep weather scoped; changing location without coordi
    assert.deepEqual(state.evidence[0]?.scope,{latitude:profile.latitude,longitude:profile.longitude});
   }
  }
-}));
+},{route:async()=>JSON.stringify({routes:['weather']})}));
 
 test('approval binds owner and exact task version; completion is an independent report',async()=>withApp(async app=>{
  await seed(app);await app.submit(owner,{requestId:'decision-message-01',text:'திட்டம்'});

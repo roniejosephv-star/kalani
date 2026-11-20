@@ -58,8 +58,8 @@ export function applicablePlaybooks(state: FarmerState, now = Date.now()): Playb
 export function proposeImprovements(state: FarmerState, now = Date.now()): Improvement[] {
   const groups: { category: Improvement['category']; types: string[]; minimum: number; proposal: string }[] = [
     { category: 'vocabulary', types: ['facts.corrected'], minimum: 1, proposal: 'Review confirmed corrections for local vocabulary and clarification improvements. Do not infer new farm facts or silently change recognition.' },
-    { category: 'retrieval', types: ['source.failed', 'source.unavailable', 'source.unconfigured'], minimum: 1, proposal: 'Review source access failures, freshness and retrieval coverage. Evaluate repaired retrieval against held-out farm scenarios.' },
-    { category: 'routing', types: ['message.clarification', 'plan.clarification'], minimum: 2, proposal: 'Review repeated clarification for unnecessary questions and missing context. Preserve consequential fact confirmation and test Tamil comprehension.' },
+    { category: 'retrieval', types: ['source.failed', 'source.unavailable', 'source.unconfigured', 'source.provider_unavailable', 'source.not_configured'], minimum: 1, proposal: 'Review source access failures, freshness and retrieval coverage. Evaluate repaired retrieval against held-out farm scenarios.' },
+    { category: 'routing', types: ['message.clarification', 'plan.clarification'], minimum: 2, proposal: 'Review repeated clarification for unnecessary questions and missing context. Preserve consequential fact confirmation and evaluate English and Tamil comprehension.' },
   ];
   const created: Improvement[] = [];
   for (const group of groups) {
@@ -72,8 +72,10 @@ export function proposeImprovements(state: FarmerState, now = Date.now()): Impro
   return created;
 }
 
+const releaseSuites = ['held-out-farms', 'tamil-comprehension', 'english-comprehension'] as const;
+
 export interface EvaluationInput {
-  suite: 'held-out-farms' | 'tamil-comprehension';
+  suite: typeof releaseSuites[number];
   suiteVersion: string;
   expectedCases: string[];
   results: { caseId: string; label: string; passed: boolean; heldOut: true }[];
@@ -88,7 +90,7 @@ function proposalFor(state: FarmerState, id: string): Improvement {
 }
 
 function validateEvaluation(input: EvaluationInput) {
-  if (!input || !['held-out-farms', 'tamil-comprehension'].includes(input.suite) || typeof input.suiteVersion !== 'string' || !input.suiteVersion.trim() || typeof input.report !== 'string' || !input.report.trim() || input.report.length > 4000 || !Array.isArray(input.expectedCases) || input.expectedCases.length === 0 || input.expectedCases.length > 1000 || input.expectedCases.some(id => typeof id !== 'string' || !id.trim()) || new Set(input.expectedCases).size !== input.expectedCases.length || !Array.isArray(input.results) || input.results.length !== input.expectedCases.length || new Set(input.results.map(result => result?.caseId)).size !== input.results.length || input.results.some(result => !result || !input.expectedCases.includes(result.caseId) || typeof result.label !== 'string' || !result.label.trim() || typeof result.passed !== 'boolean' || result.heldOut !== true)) throw new AppError('invalid_evaluation', 'Supply a versioned held-out suite with labelled outcomes for every declared case.');
+  if (!input || !releaseSuites.includes(input.suite) || typeof input.suiteVersion !== 'string' || !input.suiteVersion.trim() || typeof input.report !== 'string' || !input.report.trim() || input.report.length > 4000 || !Array.isArray(input.expectedCases) || input.expectedCases.length === 0 || input.expectedCases.length > 1000 || input.expectedCases.some(id => typeof id !== 'string' || !id.trim()) || new Set(input.expectedCases).size !== input.expectedCases.length || !Array.isArray(input.results) || input.results.length !== input.expectedCases.length || new Set(input.results.map(result => result?.caseId)).size !== input.results.length || input.results.some(result => !result || !input.expectedCases.includes(result.caseId) || typeof result.label !== 'string' || !result.label.trim() || typeof result.passed !== 'boolean' || result.heldOut !== true)) throw new AppError('invalid_evaluation', 'Supply a versioned held-out suite with labelled outcomes for every declared case.');
   requireReviewer(input.evaluator);
 }
 
@@ -106,13 +108,13 @@ export function releaseProposal(state: FarmerState, id: string, reviewer: string
   requireReviewer(reviewer);
   const proposal = proposalFor(state, id);
   if (proposal.status !== 'evaluated' || proposal.evaluatedVersion !== proposal.version || proposal.baselineVersion !== state.activeRelease) throw new AppError('evaluation_required', 'Evaluate the current proposal against the current baseline before release.', 409);
-  for (const suite of ['held-out-farms', 'tamil-comprehension']) {
+  for (const suite of releaseSuites) {
     const evaluation = proposal.evaluations.findLast(item => item.suite === suite);
     let report: EvaluationInput & { proposalVersion: number };
     try {
       report = JSON.parse(evaluation?.report ?? 'null'); validateEvaluation(report);
-    } catch { throw new AppError('evaluation_required', 'Both held-out farm and Tamil comprehension reports are required.', 409); }
-    if (!evaluation?.passed || report.proposalVersion !== proposal.version || report.suite !== suite || !report.results.every(result => result.passed)) throw new AppError('evaluation_failed', 'Both suites must pass on the exact proposal version.', 409);
+    } catch { throw new AppError('evaluation_required', 'Held-out farm, English comprehension, and Tamil comprehension reports are required.', 409); }
+    if (!evaluation?.passed || report.proposalVersion !== proposal.version || report.suite !== suite || !report.results.every(result => result.passed)) throw new AppError('evaluation_failed', 'All suites must pass on the exact proposal version.', 409);
   }
   (state.releaseHistory ??= []).push({ id: randomUUID(), proposalId: id, proposalVersion: proposal.version, previousRelease: state.activeRelease, reviewer: reviewer.trim(), at: iso(now), action: 'release' });
   state.activeRelease = `${id}@${proposal.version}`;

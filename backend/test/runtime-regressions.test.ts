@@ -5,9 +5,12 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { BACKGROUND_CONTEXT as ctx } from '@earendil-works/chord/context';
-import { SPEECH_TEXT_LIMIT, type FarmLocale } from '../src/adapters.js';
+import { AgentDoc, configure } from '@earendil-works/pi-durable';
+import { AdapterError, SPEECH_TEXT_LIMIT, type FarmLocale } from '../src/adapters.js';
 import { openFarmRuntime, type FarmRuntime, type RuntimeOptions } from '../src/runtime.js';
 import { FarmDoc, decodePlan, publicState } from '../src/domain.js';
+import { hasLocaleScript, spokenLanguageCommand } from '../src/languages.js';
+import { renderRainForecast } from '../src/weather-copy.js';
 import { fixtures, owner, seed, waitState } from './support/fixtures.js';
 import { testPiModel } from './support/pi-model.js';
 async function withApp(run:(app:FarmRuntime,directory:string)=>Promise<void>, options:Partial<RuntimeOptions>={}){
@@ -15,7 +18,7 @@ async function withApp(run:(app:FarmRuntime,directory:string)=>Promise<void>, op
  try{await run(app,directory);}finally{await app.close();await rm(directory,{recursive:true,force:true});}
 }
 
-for(const kind of ['guidance','refusal'] as const)test(`chemical quantities in ${kind} narrative become a deterministic refusal before publication`,async()=>{
+for(const kind of ['guidance','clarification','refusal'] as const)test(`chemical quantities in ${kind} narrative become a deterministic refusal before publication`,async()=>{
  const base=fixtures('/unused').testReasoner!;
  await withApp(async app=>{
   await seed(app);await app.submit(owner,{requestId:`chemical-${kind}-001`,text:'மருந்து பற்றி கேள்வி'});
@@ -24,6 +27,45 @@ for(const kind of ['guidance','refusal'] as const)test(`chemical quantities in $
   assert.match(answer.text,/உறுதி செய்ய முடியவில்லை/);assert.ok(!answer.text.includes('250'));assert.equal(state.tasks.length,0);
   assert.ok(state.events.some(e=>e.type==='plan.refusal'));assert.deepEqual(answer.evidenceIds,[]);
  },{testReasoner:async(role,packet)=>role==='main'?JSON.stringify({kind,text:'பூச்சிக்கொல்லி மருந்து 250 ml பயன்படுத்தவும்.',evidenceIds:['synthetic-weather'],missingFacts:[],uncertainty:[],tasks:[]}):base(role,packet)});
+});
+
+for(const [locale,text] of [
+ ['en-IN','The forecast covers 20–26 November. Which topic do you mean: field activities or timing (sowing, transplanting, fertiliser application, harvest)?'],
+ ['ta-IN','நவம்பர் 20 முதல் 26 வரை வானிலைத் தகவல் உள்ளது. விதைப்பு, உரம், அறுவடை இவற்றில் எதைப் பற்றி கேட்கிறீர்கள் என்று தெளிவுபடுத்தவும்.'],
+] as const)test(`a neutral ${locale} clarification can name field topics and weather dates`,async()=>{
+ const base=fixtures('/unused').testReasoner!;
+ await withApp(async app=>{
+  await seed(app);
+  await app.preferences(owner,{requestId:'clarification-locale',locale});
+  const id=await app.submit(owner,{requestId:'neutral-field-topic',text:'Field activities?'});
+  const state=await waitState(app,s=>s.messages.some(m=>m.id===`reply-${id}`&&m.audioStatus==='ready'));
+  assert.equal(state.messages.find(m=>m.id===`reply-${id}`)?.text,text);
+  assert.ok(state.events.some(e=>e.type==='plan.clarification'));
+  assert.equal(state.tasks.length,0);
+ },{testReasoner:async(role,packet)=>role==='main'?JSON.stringify({kind:'clarification',text,evidenceIds:['synthetic-weather'],missingFacts:[],uncertainty:[],tasks:[]}):base(role,packet)});
+});
+
+test('a clarification cannot direct chemical intervention without dosing information',async()=>{
+ const base=fixtures('/unused').testReasoner!;
+ await withApp(async app=>{
+  await seed(app);
+  await app.preferences(owner,{requestId:'directive-locale',locale:'en-IN'});
+  await app.submit(owner,{requestId:'chemical-directive-blocked',text:'Field activities?'});
+  const state=await waitState(app,s=>s.messages.some(m=>m.role==='assistant'&&m.audioStatus==='ready'));
+  assert.ok(state.events.some(e=>e.type==='plan.refusal'));
+  assert.equal(state.tasks.length,0);
+ },{testReasoner:async(role,packet)=>role==='main'?JSON.stringify({kind:'clarification',text:'Please apply fertiliser tomorrow. When was the field planted?',evidenceIds:['synthetic-weather'],missingFacts:[],uncertainty:[],tasks:[]}):base(role,packet)});
+});
+
+test('chemical interventions cannot be proposed as tasks even without dosing information',async()=>{
+ const base=fixtures('/unused').testReasoner!;
+ await withApp(async app=>{
+  await seed(app);
+  const id=await app.submit(owner,{requestId:'chemical-task-blocked',text:'திட்டம்'});
+  const state=await waitState(app,s=>s.messages.some(m=>m.id===`reply-${id}`&&m.audioStatus==='ready'));
+  assert.ok(state.events.some(e=>e.type==='plan.refusal'));
+  assert.equal(state.tasks.length,0);
+ },{testReasoner:async(role,packet)=>role==='main'?JSON.stringify({kind:'guidance',text:'இந்த வாரம் வயலைப் பார்வையிடவும்.',evidenceIds:['synthetic-weather'],missingFacts:[],uncertainty:[],tasks:[{title:'உரம் இடவும்',reason:'சோதனைப் பரிந்துரை',dueAt:new Date(Date.now()+360000).toISOString(),evidenceIds:['synthetic-weather'],uncertainty:[]}]}):base(role,packet)});
 });
 
 test('postponed task needs a new proposal for approval but still accepts an independent completion report',async()=>withApp(async app=>{
@@ -144,6 +186,8 @@ test('same farmer switches language while a voice message is processing without 
  const gate=new Promise<void>(resolve=>{release=resolve;});
  await withApp(async app=>{
   await seed(app);
+  const conversationId=await app.ensureFarmer(owner);
+  await app.harness.commit(tx=>configure(tx,conversationId,{instructions:'You are a Tamil farm assistant. Reply only in Tamil.'}),ctx);
   assert.equal((await app.state(owner)).preferences.locale,'ta-IN');
   await app.preferences(owner,{requestId:'select-english',locale:'en-IN'});
   const recording=await app.upload(owner,'language-recording-001',Buffer.from('SYNTHETIC LANGUAGE RECORDING'),'audio/wav');
@@ -151,6 +195,7 @@ test('same farmer switches language while a voice message is processing without 
   await reached;
   try{await app.preferences(owner,{requestId:'select-tamil',locale:'ta-IN'});}finally{release();}
   await waitState(app,s=>s.messages.some(m=>m.id===`reply-${english}`&&m.audioStatus==='ready'));
+  assert.match((await app.harness.snapshot(AgentDoc,conversationId,ctx))!.instructions!,/requested response language/);
   const tamil=await app.submit(owner,{requestId:'language-tamil-001',audioId:recording});
   const state=await waitState(app,s=>s.messages.some(m=>m.id===`reply-${tamil}`&&m.audioStatus==='ready'));
   assert.equal(state.preferences.locale,'ta-IN');
@@ -173,6 +218,99 @@ test('same farmer switches language while a voice message is processing without 
   },
   synthesize:async(text,locale)=>{calls.push({stage:'tts',locale});return fixture.speech!.synthesize(text,locale);},
  }});
+});
+
+test('explicit language commands work in both directions without treating mixed speech as a change',async()=>{
+ const fixture=fixtures('/unused');
+ assert.equal(spokenLanguageCommand('Please, speak in Tamil from now on.'),'ta-IN');
+ assert.equal(spokenLanguageCommand('தயவுசெய்து தமிழ்ல பதில் சொல்லு'),'ta-IN');
+ assert.equal(spokenLanguageCommand('Please reply in Tamil and check the forecast.'),undefined);
+ const spoken:FarmLocale[]=[];
+ const transcriptions=['Reply in Tamil.','Rain forecast in Tamil Nadu?','இங்கிலீஷ்ல பேசுங்க.'];
+ await withApp(async app=>{
+  await app.preferences(owner,{requestId:'initial-english-01',locale:'en-IN'});
+  const audioId=await app.upload(owner,'spoken-switch-audio',Buffer.from('SYNTHETIC COMMAND'),'audio/wav');
+  let oldAudioId:string|undefined;
+  let oldAudio:Buffer|undefined;
+  for(const [index,locale] of ['ta-IN','ta-IN','en-IN'].entries()){
+   const messageId=await app.submit(owner,{requestId:`spoken-language-${index}`,audioId});
+   const state=await waitState(app,s=>s.messages.some(m=>m.id===`reply-${messageId}`&&m.audioStatus==='ready'));
+   const reply=state.messages.find(m=>m.id===`reply-${messageId}`)!;
+   assert.equal(state.preferences.locale,locale);
+   assert.equal(reply.locale,locale);
+   assert.equal(state.messages.find(m=>m.id===messageId)?.locale,index===0?'en-IN':'ta-IN');
+   if(index===0){oldAudioId=reply.audioId!;oldAudio=(await app.getAudio(owner,oldAudioId)).bytes;}
+  }
+  assert.deepEqual(spoken,['ta-IN','ta-IN','en-IN']);
+  assert.deepEqual((await app.getAudio(owner,oldAudioId!)).bytes,oldAudio);
+ },{speech:{...fixture.speech!,transcribe:async()=>({text:transcriptions.shift()!,language:null}),
+  synthesize:async(text,locale)=>{spoken.push(locale!);return fixture.speech!.synthesize(text,locale);},
+ },route:async()=>JSON.stringify({routes:[],clarification:'எந்தத் தகவல் வேண்டும்?'})});
+});
+
+test('delayed speech cannot override a manual language selection, including a repeat selection',async()=>{
+ const fixture=fixtures('/unused');
+ let entered!:()=>void, release!:()=>void;
+ const reached=new Promise<void>(resolve=>{entered=resolve;});
+ const gate=new Promise<void>(resolve=>{release=resolve;});
+ await withApp(async app=>{
+  await app.preferences(owner,{requestId:'manual-english-initial',locale:'en-IN'});
+  const audioId=await app.upload(owner,'delay-switch-audio',Buffer.from('SYNTHETIC COMMAND'),'audio/wav');
+  const id=await app.submit(owner,{requestId:'delay-switch-message',audioId});
+  await reached;
+  try{await app.preferences(owner,{requestId:'manual-english-repeat',locale:'en-IN'});}finally{release();}
+  const state=await waitState(app,s=>s.messages.some(m=>m.id===`reply-${id}`&&m.audioStatus==='ready'));
+  assert.equal(state.preferences.locale,'en-IN');
+  assert.match(state.messages.find(m=>m.id===`reply-${id}`)!.text,/most recently/);
+ },{speech:{...fixture.speech!,transcribe:async()=>{entered();await gate;return {text:'Reply in Tamil.',language:'en-IN'};}}});
+});
+
+test('pilot languages have independent enablement, voice commands and plain forecast copy',async()=>{
+ const previous=process.env.KALANI_PILOT_LANGUAGES;
+ try{
+  delete process.env.KALANI_PILOT_LANGUAGES;
+  await withApp(async app=>{
+   assert.deepEqual(publicState(await app.state(owner)).enabledLanguages,['en-IN','ta-IN']);
+   await assert.rejects(app.preferences(owner,{requestId:'pilot-disabled',locale:'kn-IN'}),{code:'unsupported_locale'});
+   for (const [locale,command] of [
+    ['kn-IN','ಕನ್ನಡದಲ್ಲಿ ಮಾತಾಡಿ'],
+    ['ml-IN','മലയാളത്തിൽ സംസാരിക്കൂ'],
+    ['te-IN','తెలుగులో మాట్లాడండి'],
+   ] as const){
+    process.env.KALANI_PILOT_LANGUAGES=locale;
+    const state=await app.preferences(owner,{requestId:`pilot-language-${locale}`,locale});
+    assert.deepEqual(state.enabledLanguages,['en-IN','ta-IN',locale]);
+    assert.equal(state.preferences.locale,locale);
+    assert.equal(spokenLanguageCommand(command),locale);
+    const forecast=renderRainForecast({timezone:'Asia/Kolkata',days:[{date:'2026-11-20',likelihood:'possible'}]},locale);
+    assert.ok(hasLocaleScript(forecast,locale));
+    assert.doesNotMatch(forecast,/%|percent/iu);
+   }
+  });
+ }finally{
+  if(previous===undefined)delete process.env.KALANI_PILOT_LANGUAGES;
+  else process.env.KALANI_PILOT_LANGUAGES=previous;
+ }
+});
+
+test('a speech provider outage leaves the recording available for a same-message retry',async()=>{
+ const fixture=fixtures('/unused');let calls=0;
+ await withApp(async app=>{
+  await seed(app);
+  const recording=await app.upload(owner,'speech-outage-upload',Buffer.from('SYNTHETIC RECORDING'),'audio/mp4');
+  const id=await app.submit(owner,{requestId:'speech-outage-submit',audioId:recording});
+  let state=await waitState(app,s=>s.messages.some(m=>m.id===id&&m.status==='failed'));
+  assert.equal(state.messages.find(m=>m.id===id)?.error,'transcription_unavailable');
+  assert.equal(state.messages.find(m=>m.id===id)?.audioId,recording);
+  assert.equal(state.messages.filter(m=>m.role==='assistant').length,0);
+  assert.equal(await app.retryMessage(owner,id,'speech-outage-retry'),id);
+  state=await waitState(app,s=>s.messages.some(m=>m.id===`reply-${id}`&&m.audioStatus==='ready'));
+  assert.equal(state.messages.filter(m=>m.role==='farmer').length,1);
+  assert.equal(calls,2);
+ },{speech:{...fixture.speech!,transcribe:async(...args)=>{
+  if(++calls===1)throw new AdapterError('unavailable','Private provider details',503);
+  return fixture.speech!.transcribe(...args);
+ }}});
 });
 
 test('plan validation gates pure opposite-language reply text',()=>{

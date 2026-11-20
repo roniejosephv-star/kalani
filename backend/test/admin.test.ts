@@ -5,8 +5,22 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { createBackup } from '../src/admin.js';
+import { createBackup, filteredTrace } from '../src/admin.js';
+import { emptyFarmer } from '../src/domain.js';
 import { openFarmRuntime } from '../src/runtime.js';
+
+test('operator trace exposes workflow timing and outcome without raw provider fields', () => {
+  const state = emptyFarmer();
+  const entry = {
+    role: 'weather', at: '2026-11-20T00:00:00Z', messageId: 'fixture', contextVersion: 1, evidenceIds: [],
+    summary: JSON.stringify({ stage: 'collect', round: 1, outcome: 'supported', durationMs: 25, rawAudio: 'private', token: 'secret' }),
+  };
+  state.traces.push(entry, { ...entry, summary: JSON.stringify({ stage: 'unknown', round: 4, durationMs: -1 }) });
+  assert.deepEqual(filteredTrace(state), [
+    { role: 'weather', at: entry.at, messageId: 'fixture', contextVersion: 1, evidenceIds: [], stage: 'collect', round: 1, outcome: 'supported', durationMs: 25, contribution: {} },
+    { role: 'weather', at: entry.at, messageId: 'fixture', contextVersion: 1, evidenceIds: [], contribution: {} },
+  ]);
+});
 
 test('backup restores Pi state and complete private audio, preserves hashes and excludes plaintext tokens', async () => {
   const root = await mkdtemp('/private/tmp/farm-backup-test-');

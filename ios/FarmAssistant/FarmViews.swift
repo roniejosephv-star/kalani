@@ -8,6 +8,7 @@ struct FarmFactsView: View {
     @State private var village = ""
     @State private var crop = ""
     @State private var district = ""
+    @State private var province = ""
     @State private var latitude = ""
     @State private var longitude = ""
     @State private var soil = ""
@@ -38,6 +39,7 @@ struct FarmFactsView: View {
                 TextField(store.localized("உங்கள் வயல் எந்த ஊரில் இருக்கிறது?", "Which village is your farm in?"), text: locationField($village)).accessibilityIdentifier("village")
                 TextField(store.localized("இப்போது என்ன பயிர் சாகுபடி செய்கிறீர்கள்?", "What crop are you growing now?"), text: $crop).accessibilityIdentifier("crop")
                 TextField(store.localized("மாவட்டம் (தெரிந்தால்)", "District (if known)"), text: locationField($district)).accessibilityIdentifier("district")
+                TextField(store.localized("மாநிலம் (தெரிந்தால்)", "State (if known)"), text: locationField($province)).accessibilityIdentifier("farmState")
             }
             Section {
                 DisclosureGroup(store.localized("கூடுதல் விவரங்கள் (விருப்பம்)", "More details (optional)")) {
@@ -61,6 +63,7 @@ struct FarmFactsView: View {
             village = state.facts["village"]?.text ?? ""
             crop = state.facts["crop"]?.text ?? ""
             district = state.facts["district"]?.text ?? ""
+            province = state.facts["state"]?.text ?? ""
             latitude = state.facts["latitude"]?.text ?? ""
             longitude = state.facts["longitude"]?.text ?? ""
             soil = state.facts["soil"]?.text ?? ""
@@ -108,6 +111,7 @@ struct FarmFactsView: View {
         if let value = facts["village"] { locationField($village).wrappedValue = value.text }
         if let value = facts["crop"] { crop = value.text }
         if let value = facts["district"] { locationField($district).wrappedValue = value.text }
+        if let value = facts["state"] { locationField($province).wrappedValue = value.text }
         if let value = facts["soil"] { soil = value.text }
         if let value = facts["irrigation"] { irrigation = value.text }
         expectedVersion = store.state?.version ?? expectedVersion
@@ -126,10 +130,10 @@ struct FarmFactsView: View {
         }
         var facts: [String: Any] = [:]
         var rows: [(String, String)] = []
-        for (key, label, value) in [("village", store.localized("ஊர்", "Village"), village), ("crop", store.localized("பயிர்", "Crop"), crop), ("district", store.localized("மாவட்டம்", "District"), district), ("soil", store.localized("மண்", "Soil"), soil), ("irrigation", store.localized("பாசனம்", "Irrigation"), irrigation)] {
+        for (key, label, value) in [("village", store.localized("ஊர்", "Village"), village), ("crop", store.localized("பயிர்", "Crop"), crop), ("district", store.localized("மாவட்டம்", "District"), district), ("state", store.localized("மாநிலம்", "State"), province), ("soil", store.localized("மண்", "Soil"), soil), ("irrigation", store.localized("பாசனம்", "Irrigation"), irrigation)] {
             let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
             if !value.isEmpty { facts[key] = value; rows.append((label, value)) }
-            else if key == "district", let previous = state.facts[key]?.text, !previous.isEmpty {
+            else if ["district", "state"].contains(key), let previous = state.facts[key]?.text, !previous.isEmpty {
                 facts[key] = ""
                 rows.append((label, store.localized("நீக்கப்படும்", "Will be removed")))
             }
@@ -151,47 +155,76 @@ struct TaskDecision: Identifiable { let id = UUID(); let task: FarmTask; let dec
 struct WeekView: View {
     @Environment(FarmStore.self) private var store
     @State private var decision: TaskDecision?
+    @State private var composer: ComposerSheet?
+
+    private var agenda: [AgendaItem] {
+        let state = store.state
+        let events = (state?.calendarEntries ?? []).filter {
+            $0.status == "saved" && $0.fieldId == state?.fieldId && $0.cycleId == state?.cycleId
+        }
+        let tasks = (state?.tasks ?? []).filter { $0.status == "approved" }
+        return (events.map(AgendaItem.event) + tasks.map(AgendaItem.task)).sorted { $0.dueAt < $1.dueAt }
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             List {
-                if store.state?.tasks.isEmpty != false { Text(store.localized("இன்னும் வேலைத் திட்டம் இல்லை. உங்கள் கவலையைச் சொல்லுங்கள்; ஆதாரங்களுடன் திட்டத்தை உருவாக்குவோம்.", "No tasks yet. Tell us what you need help with and we'll build a plan using available sources.")) }
-                ForEach(store.state?.tasks ?? []) { task in
-                    Section {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(task.title).font(.headline)
-                            Text(store.dateLabel(task.dueAt)).font(.caption).foregroundStyle(.secondary)
-                            Text(task.reason)
-                            Text(store.statusLabel(task.status)).font(.subheadline.bold())
-                            ForEach(task.uncertainty, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
-                            EvidenceList(ids: task.evidenceIds)
-                            if task.status == "proposed" {
-                                Button(store.localized("செய்ய ஒப்புக்கொள்கிறேன்", "Approve task")) { decision = TaskDecision(task: task, decision: "approved", label: store.localized("செய்ய ஒப்புக்கொள்கிறேன்", "Approve task")) }
-                            }
-                            if task.status == "postponed" {
-                                Text(store.localized("புதிய தகவலுடன் திட்டத்தை மீண்டும் கேளுங்கள். பழைய ஒப்புதலை மீண்டும் பயன்படுத்த முடியாது.", "Ask for a new plan with the latest details. Earlier approval can't be reused.")).font(.caption).foregroundStyle(.secondary)
-                            }
-                            if ["proposed", "approved", "postponed"].contains(task.status) {
-                                Button(store.localized("செய்துவிட்டேன்", "Mark as done")) { decision = TaskDecision(task: task, decision: "completed", label: store.localized("செய்துவிட்டேன்", "Mark as done")) }
-                                Button(store.localized("பிறகு செய்யலாம்", "Postpone")) { decision = TaskDecision(task: task, decision: "postponed", label: store.localized("பிறகு செய்யலாம்", "Postpone")) }
-                                Button(store.localized("வேண்டாம்", "Decline"), role: .destructive) { decision = TaskDecision(task: task, decision: "rejected", label: store.localized("வேண்டாம்", "Decline")) }
-                            }
-                        }.padding(.vertical, 6)
-                    }.id(task.id)
+                Section {
+                    @Bindable var store = store
+                    DatePicker(store.localized("நாளைத் தேர்ந்தெடுக்கவும்", "Choose a day"), selection: $store.calendarDay, displayedComponents: .date)
+                        .accessibilityIdentifier("calendarDay")
+                    Button(store.localized("இன்று", "Today")) { store.calendarDay = farmCalendar.startOfDay(for: .now) }
+                    Button { composer = ComposerSheet() } label: {
+                        Label(store.localized("நினைவூட்டல் சேர்க்கவும்", "Add a reminder"), systemImage: "plus.circle")
+                    }.accessibilityIdentifier("addCalendarEvent")
+                }
+                .environment(\.timeZone, farmTimeZone)
+
+                let selected = agenda.filter { $0.date.map { farmCalendar.isDate($0, inSameDayAs: store.calendarDay) } ?? false }
+                Section(store.localized("தேர்ந்தெடுத்த நாள்", "Selected day")) {
+                    if selected.isEmpty {
+                        Text(store.localized("இந்த நாளில் எதுவும் திட்டமிடப்படவில்லை.", "Nothing is scheduled for this day.")).foregroundStyle(.secondary)
+                    }
+                    ForEach(selected) { item in agendaRow(item) }
+                }
+                let endOfDay = farmCalendar.date(byAdding: .day, value: 1, to: farmCalendar.startOfDay(for: store.calendarDay)) ?? store.calendarDay
+                let upcoming = agenda.filter { ($0.date ?? .distantPast) >= max(endOfDay, .now) }
+                if !upcoming.isEmpty {
+                    Section(store.localized("வரவிருப்பவை", "Upcoming")) {
+                        ForEach(upcoming) { item in agendaRow(item) }
+                    }
+                }
+
+                let drafts = (store.state?.calendarEntries ?? []).filter { $0.status == "draft" }
+                let review = (store.state?.tasks ?? []).filter { ["proposed", "postponed"].contains($0.status) }
+                if !drafts.isEmpty || !review.isEmpty {
+                    Section(store.localized("உங்கள் முடிவுக்காக", "Needs your review")) {
+                        ForEach(drafts) { CalendarEntryCard(entry: $0, inCalendar: true) }
+                        ForEach(review) { task in taskRow(task) }
+                    }
+                }
+                let history = (store.state?.tasks ?? []).filter { ["completed", "rejected", "superseded"].contains($0.status) }
+                if !history.isEmpty {
+                    Section(store.localized("முந்தைய வேலைகள்", "Past farm tasks")) {
+                        ForEach(history) { task in taskRow(task) }
+                    }
                 }
                 if let notifications = store.state?.notifications, !notifications.isEmpty {
                     Section(store.localized("நினைவூட்டல்கள்", "Reminders")) {
-                        ForEach(notifications) { notification in
+                        ForEach(notifications.filter { !["cancelled", "expired"].contains($0.status) }) { notification in
                             VStack(alignment: .leading) {
                                 Text(notification.title)
-                                Text(store.dateLabel(notification.dueAt)).font(.caption).foregroundStyle(.secondary)
+                                Text(store.dateLabel(notification.dueAt)).font(.caption)
                                 Text(store.statusLabel(notification.status)).font(.caption)
                             }
                         }
                     }
                 }
-            }.onChange(of: store.selectedTaskID) { _, id in if let id { proxy.scrollTo(id, anchor: .top) } }
+            }
+            .onChange(of: store.selectedTaskID) { _, id in if let id { proxy.scrollTo(id, anchor: .top) } }
         }
-        .navigationTitle(store.localized("இந்த வாரம்", "This week"))
+        .navigationTitle(store.localized("நாள்காட்டி", "Calendar"))
+        .sheet(item: $composer) { _ in ComposerView(calendarRequest: true) }
         .refreshable { await store.refresh() }
         .sheet(item: $decision) { selection in
             NavigationStack {
@@ -209,6 +242,51 @@ struct WeekView: View {
             }
         }
     }
+
+    @ViewBuilder private func agendaRow(_ item: AgendaItem) -> some View {
+        switch item {
+        case .event(let entry): CalendarEntryCard(entry: entry, inCalendar: true).id(entry.id)
+        case .task(let task): taskRow(task)
+        }
+    }
+
+    private func taskRow(_ task: FarmTask) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(task.title).font(.headline)
+            Text(store.dateLabel(task.dueAt)).font(.caption).foregroundStyle(.secondary)
+            Text(task.reason)
+            Text(store.statusLabel(task.status)).font(.subheadline.bold())
+            ForEach(task.uncertainty, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
+            EvidenceList(ids: task.evidenceIds)
+            if task.status == "proposed" {
+                taskButton(task, "approved", store.localized("செய்ய ஒப்புக்கொள்கிறேன்", "Approve task"))
+            }
+            if task.status == "postponed" {
+                Text(store.localized("புதிய தகவலுடன் திட்டத்தை மீண்டும் கேளுங்கள். பழைய ஒப்புதலை மீண்டும் பயன்படுத்த முடியாது.", "Ask for a new plan with the latest details. Earlier approval can't be reused.")).font(.caption).foregroundStyle(.secondary)
+            }
+            if ["proposed", "approved", "postponed"].contains(task.status) {
+                taskButton(task, "completed", store.localized("செய்துவிட்டேன்", "Mark as done"))
+                taskButton(task, "postponed", store.localized("பிறகு செய்யலாம்", "Postpone"))
+                taskButton(task, "rejected", store.localized("வேண்டாம்", "Decline"), role: .destructive)
+            }
+        }.padding(.vertical, 6).buttonStyle(.borderless).id(task.id)
+    }
+
+    private func taskButton(_ task: FarmTask, _ value: String, _ label: String, role: ButtonRole? = nil) -> some View {
+        Button(label, role: role) { decision = TaskDecision(task: task, decision: value, label: label) }
+    }
+
+    private enum AgendaItem: Identifiable {
+        case event(CalendarEntry), task(FarmTask)
+        var id: String {
+            switch self { case .event(let item): item.id; case .task(let item): item.id }
+        }
+        var dueAt: String {
+            switch self { case .event(let item): item.dueAt ?? ""; case .task(let item): item.dueAt }
+        }
+        var date: Date? { parseFarmDate(dueAt) }
+    }
+
 }
 
 struct MyFarmView: View {
@@ -226,15 +304,11 @@ struct MyFarmView: View {
                 NavigationLink(store.localized("விவரங்களைத் திருத்தவும்", "Edit farm details")) { FarmFactsView(onboarding: false) }
             }
             Section(store.localized("மொழி மற்றும் ஒலி", "Language and audio")) {
-                Picker(store.localized("மொழி", "Language"), selection: Binding(get: { store.locale }, set: { locale in
-                    Task { await store.setLanguage(locale) }
-                })) {
-                    Text("தமிழ்").tag("ta-IN")
-                    Text("English").tag("en-IN")
+                if store.enabledLanguages.count == 2 {
+                    languagePicker.pickerStyle(.segmented)
+                } else {
+                    languagePicker.pickerStyle(.menu)
                 }
-                .pickerStyle(.segmented)
-                .accessibilityIdentifier("languagePreference")
-                .disabled(store.busy)
                 Text(store.localized("உள்ளூர் சொற்களைப் புரிந்துகொள்ள முயற்சிப்போம். புரியாதவற்றைக் கேட்டு உறுதி செய்வோம்.", "If we're unsure about a local term, we'll ask you to clarify.")).font(.caption).foregroundStyle(.secondary)
                 Toggle(store.localized("ஒலியைச் செயலாக்க அனுமதி", "Allow audio processing"), isOn: Binding(get: { store.audioConsent }, set: { store.audioConsent = $0; store.saveDraft() }))
             }
@@ -303,6 +377,18 @@ struct MyFarmView: View {
             }
         }
     }
+    private var languagePicker: some View {
+        Picker(store.localized("மொழி", "Language"), selection: Binding(get: { store.locale }, set: { locale in
+            Task { await store.setLanguage(locale) }
+        })) {
+            ForEach(store.enabledLanguages, id: \.self) { code in
+                Text(FarmStore.languageNames[code] ?? code).tag(code)
+            }
+        }
+        .accessibilityIdentifier("languagePreference")
+        .disabled(store.busy)
+    }
+
     private func notificationMessage(_ result: NotificationResult) -> String {
         switch result {
         case .denied: store.localized("அறிவிப்பு அனுமதி இல்லை. அமைப்புகளில் மாற்றலாம்.", "Notifications aren't allowed. You can change this in Settings.")

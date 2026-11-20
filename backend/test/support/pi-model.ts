@@ -11,6 +11,7 @@ export function testPiModel(beforeMain?:()=>Promise<void>, weatherReply?: (promp
   const lastUser=context.messages.filter(m=>m.role==='user').at(-1);
   const text=lastUser?.role==='user'?(typeof lastUser.content==='string'?lastUser.content:JSON.stringify(lastUser.content)):'';
   requests.push({toolNames:tools.map(t=>t.name),lastUser:text,toolResultNames:context.messages.filter(m=>m.role==='toolResult').map(m=>m.toolName)});
+  if(!tools.length&&text.includes('"routeOptions"'))return fauxAssistantMessage(JSON.stringify({routes:['weather'],clarification:null}));
   if(!tools.length)return fauxAssistantMessage('SYNTHETIC SUMMARY: crop changed, all tasks approved. This misleading fixture tests that summaries cannot become authoritative records.');
   const last=context.messages.at(-1);
   const tool=tools.at(-1)!;

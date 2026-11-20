@@ -21,8 +21,11 @@ struct FarmAssistantApp: App {
                     if phase != .active { audio.stopRecording(); audio.stopPlayback(); store.saveDraft() }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .farmNotificationOpened)) { item in
-                    store.selectedTaskID = item.userInfo?["taskId"] as? String
-                    store.selectedTab = 2
+                    let id = item.userInfo?["taskId"] as? String
+                    let date = store.state?.calendarEntries?.first(where: { $0.id == id })?.date
+                        ?? store.state?.tasks.first(where: { $0.id == id }).flatMap { parseFarmDate($0.dueAt) }
+                    store.showCalendar(on: date ?? .now)
+                    store.selectedTaskID = id
                 }
         }
     }
@@ -54,6 +57,9 @@ struct RootView: View {
                     Text("Choose your language · மொழியைத் தேர்ந்தெடுக்கவும்").multilineTextAlignment(.center)
                     Button("தமிழில் தொடரவும்") { selectLanguage("ta-IN") }.accessibilityIdentifier("chooseTamil")
                     Button("Continue in English") { selectLanguage("en-IN") }.accessibilityIdentifier("chooseEnglish")
+                    ForEach(store.enabledLanguages.filter { !["en-IN", "ta-IN"].contains($0) }, id: \.self) { code in
+                        Button(FarmStore.languageNames[code] ?? code) { selectLanguage(code) }
+                    }
                 }.buttonStyle(.borderedProminent).controlSize(.large).padding(28)
             } else if store.client == nil { ConnectionView() }
             else if store.state == nil {
@@ -73,17 +79,21 @@ struct RootView: View {
                     }
                 }.padding()
             } else if store.needsOnboarding {
-                NavigationStack { FarmFactsView(onboarding: true) }
+                NavigationStack {
+                    FarmFactsView(onboarding: true)
+                        .toolbar { LanguageMenu() }
+                }
             } else {
                 TabView(selection: $store.selectedTab) {
-                    NavigationStack { TodayView() }.tabItem { Label(store.localized("இன்று", "Today"), systemImage: "sun.max") }.tag(0)
-                    NavigationStack { ConversationView() }.tabItem { Label(store.localized("உரையாடல்", "Conversation"), systemImage: "bubble.left.and.bubble.right") }.tag(1)
-                    NavigationStack { WeekView() }.tabItem { Label(store.localized("இந்த வாரம்", "This Week"), systemImage: "calendar") }.tag(2)
-                    NavigationStack { MyFarmView() }.tabItem { Label(store.localized("என் பண்ணை", "My Farm"), systemImage: "leaf") }.tag(3)
+                    NavigationStack { TodayView().toolbar { LanguageMenu() } }.tabItem { Label(store.localized("இன்று", "Today"), systemImage: "sun.max") }.tag(0)
+                    NavigationStack { ConversationView().toolbar { LanguageMenu() } }.tabItem { Label(store.localized("உரையாடல்", "Conversation"), systemImage: "bubble.left.and.bubble.right") }.tag(1)
+                    NavigationStack { WeekView().toolbar { LanguageMenu() } }.tabItem { Label(store.localized("நாள்காட்டி", "Calendar"), systemImage: "calendar") }.tag(2)
+                    NavigationStack { MyFarmView().toolbar { LanguageMenu() } }.tabItem { Label(store.localized("என் பண்ணை", "My Farm"), systemImage: "leaf") }.tag(3)
                 }
             }
         }
         .tint(.green)
+        .environment(\.locale, Locale(identifier: store.locale))
         .alert(store.localized("தகவல்", "Information"), isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
             Button(store.localized("சரி", "OK")) { store.error = nil }
         } message: { Text(store.error ?? "") }
@@ -91,6 +101,46 @@ struct RootView: View {
     private func selectLanguage(_ locale: String) {
         store.chooseInitialLanguage(locale)
         Task { await store.setLanguage(locale) }
+    }
+}
+
+struct LanguageMenu: View {
+    @Environment(FarmStore.self) private var store
+    var body: some View {
+        Group {
+            if store.enabledLanguages.count == 2 {
+                Picker(store.localized("மொழி", "Language"), selection: Binding(get: { store.locale }, set: select)) {
+                    ForEach(store.enabledLanguages, id: \.self) { code in
+                        Text(FarmStore.languageNames[code] ?? code).tag(code)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(minWidth: 135)
+            } else {
+                Menu {
+                    ForEach(store.enabledLanguages, id: \.self) { code in
+                        Button {
+                            select(code)
+                        } label: {
+                            if code == store.locale {
+                                Label(FarmStore.languageNames[code] ?? code, systemImage: "checkmark")
+                            } else {
+                                Text(FarmStore.languageNames[code] ?? code)
+                            }
+                        }
+                    }
+                } label: {
+                    Label(FarmStore.languageNames[store.locale] ?? store.locale, systemImage: "globe")
+                }
+                .accessibilityHint(store.localized("மொழியை மாற்றவும்", "Change language"))
+            }
+        }
+        .accessibilityIdentifier("navigationLanguage")
+        .disabled(store.busy)
+    }
+    private func select(_ locale: String) {
+        if store.state == nil { store.chooseInitialLanguage(locale) }
+        else { Task { await store.setLanguage(locale) } }
     }
 }
 
@@ -114,7 +164,7 @@ struct ConnectionView: View {
                         catch { store.error = store.localized("முகவரியைச் சரிபார்க்கவும். HTTPS அல்லது இந்த Mac-இன் localhost இணைப்பைப் பயன்படுத்தவும்.", "Check the address. Use HTTPS or the local connection on this Mac.") }
                     }.disabled(token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("connect")
                 }
-            }.navigationTitle("Kalani")
+            }.navigationTitle("Kalani").toolbar { LanguageMenu() }
         }.onAppear { url = store.baseURL }
     }
 }

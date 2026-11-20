@@ -11,6 +11,8 @@ struct FarmerState: Decodable {
     let evidence: [Evidence]
     let notifications: [FarmNotification]
     let sequence: Int
+    let enabledLanguages: [String]?
+    let calendarEntries: [CalendarEntry]?
 }
 
 enum FactValue: Decodable {
@@ -36,6 +38,17 @@ struct FarmMessage: Decodable, Identifiable {
     let error: String?
     let evidenceIds: [String]?
     let proposedFacts: [String: FactValue]?
+    let calendarEntryId: String?
+}
+struct CalendarEntry: Decodable, Identifiable {
+    let id: String
+    let version: Int
+    let fieldId: String
+    let cycleId: String
+    let title: String
+    let dueAt: String?
+    let status: String
+    var date: Date? { dueAt.flatMap(parseFarmDate) }
 }
 struct FarmTask: Decodable, Identifiable {
     let id: String
@@ -112,13 +125,25 @@ func tamilStatus(_ status: String) -> String {
     default: return status
     }
 }
-func displayDate(_ value: String, locale: String) -> String {
+let farmTimeZone = TimeZone(identifier: "Asia/Kolkata") ?? .gmt
+
+var farmCalendar: Calendar {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = farmTimeZone
+    return calendar
+}
+
+func parseFarmDate(_ value: String) -> Date? {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    let date = formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
-    guard let date else { return value }
+    return formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+}
+
+func displayDate(_ value: String, locale: String) -> String {
+    guard let date = parseFarmDate(value) else { return value }
     let output = DateFormatter()
     output.locale = Locale(identifier: locale)
+    output.timeZone = farmTimeZone
     output.dateStyle = .medium
     output.timeStyle = .short
     return output.string(from: date)
@@ -137,20 +162,22 @@ func displayDate(_ value: String, locale: String) -> String {
     }
 
     func serviceError(_ code: String) -> String {
-        guard locale == "en-IN" else { return tamilServiceError(code) }
+        if locale == "ta-IN" { return tamilServiceError(code) }
+        let english: String
         switch code {
-        case "claude_unconfigured", "model_unavailable": return "The reply service is unavailable. Your message is saved. Try again later."
-        case "transcription_unavailable": return "Could not transcribe the recording. Try again or type your question."
-        case "audio_missing": return "Your recording is unavailable. Record and send a new message."
-        case "invalid_model_output", "invalid_specialist_output": return "We could not verify the information, so guidance was not published. Try again."
-        case "busy": return "Earlier messages are still being processed. Please wait."
-        default: return "Could not finish processing. Try again later."
+        case "claude_unconfigured", "model_unavailable": english = "The reply service is unavailable. Your message is saved. Try again later."
+        case "transcription_unavailable": english = "Could not transcribe the recording. Try again or type your question."
+        case "audio_missing": english = "Your recording is unavailable. Record and send a new message."
+        case "invalid_model_output", "invalid_specialist_output": english = "We could not verify the information, so guidance was not published. Try again."
+        case "busy": english = "Earlier messages are still being processed. Please wait."
+        default: english = "Could not finish processing. Try again later."
         }
+        return PilotLocalization.text(english, locale: locale) ?? english
     }
 
     func statusLabel(_ status: String) -> String {
-        guard locale == "en-IN" else { return tamilStatus(status) }
-        return [
+        if locale == "ta-IN" { return tamilStatus(status) }
+        let english = [
             "queued": "Queued", "processing": "Preparing your reply", "ready": "Ready",
             "failed": "Try again", "unconfigured": "Audio service is unavailable", "pending": "Preparing audio",
             "proposed": "Awaiting your decision", "approved": "Approved", "completed": "Reported complete",
@@ -158,5 +185,6 @@ func displayDate(_ value: String, locale: String) -> String {
             "accepted": "Added to the app", "dispatching": "Sending", "uncertain": "Delivery needs checking",
             "cancelled": "Cancelled", "expired": "Expired"
         ][status] ?? status
+        return PilotLocalization.text(english, locale: locale) ?? english
     }
 }

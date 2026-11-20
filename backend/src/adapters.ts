@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 
 export const SPEECH_TEXT_LIMIT = 2500;
-export type FarmLocale = 'ta-IN' | 'en-IN';
-export const DEFAULT_LOCALE: FarmLocale = 'ta-IN';
+import { DEFAULT_LOCALE, type FarmLocale } from './languages.js';
+export { DEFAULT_LOCALE, type FarmLocale } from './languages.js';
 
 export interface Evidence {
   id: string;

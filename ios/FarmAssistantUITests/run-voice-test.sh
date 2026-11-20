@@ -1,7 +1,16 @@
 #!/bin/bash
 set -euo pipefail
 if [[ $# -lt 3 || $# -gt 4 ]]; then
-    echo "Usage: bash $0 simulator-udid disposable-token-file question.m4a|--mic [port]" >&2
+    echo "Usage: bash $0 simulator-udid disposable-token-file question.m4a|--mic|--typed [port]" >&2
+    exit 2
+fi
+test_case="${FARM_TEST_CASE:-testVoiceReplyPlaysAndReplays}"
+case "$test_case" in
+    testVoiceReplyPlaysAndReplays|testSpokenLanguageSwitch|testCalendarFromRequest) ;;
+    *) echo "Unknown FARM_TEST_CASE" >&2; exit 2 ;;
+esac
+if [[ $3 == --typed && ( $test_case != testCalendarFromRequest || -z ${FARM_UI_TEST_REQUEST:-} ) ]]; then
+    echo "--typed requires testCalendarFromRequest and FARM_UI_TEST_REQUEST" >&2
     exit 2
 fi
 umask 077
@@ -29,6 +38,8 @@ env.update(FARM_API_URL=f'http://127.0.0.1:{int(sys.argv[4])}', FARM_SESSION_TOK
            FARM_TEST_LOCALE=os.environ.get('FARM_TEST_LOCALE', 'ta-IN'))
 if str(audio) == '--mic':
     env['FARM_UI_TEST_MIC'] = '1'
+elif str(audio) == '--typed':
+    env['FARM_UI_TEST_REQUEST'] = os.environ['FARM_UI_TEST_REQUEST']
 else:
     env['FARM_UI_TEST_AUDIO'] = base64.b64encode(audio.read_bytes()).decode()
 (build_dir / 'VoiceTest.xctestrun').write_bytes(plistlib.dumps(test_run))
@@ -36,4 +47,5 @@ PY
 
 xcodebuild -xctestrun "$test_root/build/Build/Products/VoiceTest.xctestrun" \
     -destination "$destination" -parallel-testing-enabled NO \
+    -only-testing:"FarmAssistantUITests/VoiceJourneyTests/$test_case" \
     -resultBundlePath "$test_root/voice.xcresult" test-without-building

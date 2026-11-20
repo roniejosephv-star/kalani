@@ -22,7 +22,7 @@ Information retrieval, explanation and opted-in delivery do not execute a farmin
 
 ### 2.1 Tamil audio and choices — FR-01, FR-14
 
-- Tamil is the first enabled farmer-facing locale. Store a locale preference separately from recognition hints or local vocabulary. A mixed-language utterance must not silently switch the preference.
+- English and Tamil are enabled for the demo. Farmers can switch from the navigation bar or explicitly request a change by voice. Store the preference separately from recognition hints and local vocabulary. Mixed-language speech leaves it unchanged. Kannada, Malayalam, and Telugu are individually gated pilots.
 - Provide recording start/stop, preview, discard and explicit send. Microphone access is requested when recording is chosen, not merely when the app opens. Listening requires no microphone permission.
 - Every successful assistant response has matching Tamil text and generated audio, replay and relevant contextual choices. Audio generation failure exposes text plus a recoverable audio status; this is degraded service, not full audio success.
 - Original recordings, transcripts and extracted facts are separate records. Editing or clarifying an extracted fact does not rewrite the original recording. Retain what was confirmed and from which message.
@@ -161,6 +161,8 @@ The initial catalogue may be small and reviewed. It must be honest about geograp
 ## 6. Notifications, events and recovery — FR-04, FR-10, FR-14
 
 Use the in-app inbox and calendar as the authoritative saved record. Delivery channel/platform remains open. A successful scheduling/provider response does not establish that the farmer received or heard an update.
+
+The agenda separates confirmed farmer reminders and approved work from drafts and suggested tasks. An exact typed reminder can save with Undo. Spoken requests and interpreted times use a dated preview and explicit Save. Pi validates dates, conflicts, and versions in India time. Calendar entries record farmer intent independently of evidence-backed farm tasks.
 
 Notification inputs include owner, farm/cycle, referenced item/version, relevance reason, category, scheduled local time, expiry, delivery preference and deduplication identity. Support weekly activity reminders, material changed guidance, relevant questions and verified opportunity deadlines. Do not send an unrelated scheme or crop message merely to maintain engagement.
 

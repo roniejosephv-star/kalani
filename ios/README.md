@@ -16,7 +16,7 @@ The app supports owner export and deletion endpoints. Exported data is private a
 
 ## Verification
 
-Use the root implementation status for current build and launch evidence. A successful simulator build does not validate microphone quality, Tamil comprehension, speech provider integration, source applicability, background notifications or physical-device operation. Tamil copy is a draft requiring native-speaker review. No fixtures or canned agent responses are embedded in this app.
+Use [the implementation status](../docs/verification/IMPLEMENTATION_STATUS.md) for current build and launch evidence. A successful simulator build does not validate microphone quality, Tamil comprehension, speech provider integration, source applicability, background notifications or physical-device operation. Tamil copy is a draft requiring native-speaker review. No fixtures or canned agent responses are embedded in this app.
 
 Relevant APIs: [Apple streaming URLSession bytes](https://developer.apple.com/documentation/foundation/urlsession/bytes(for:delegate:)), [Apple microphone permission](https://developer.apple.com/documentation/avfaudio/avaudioapplication/requestrecordpermission(completionhandler:)).
 

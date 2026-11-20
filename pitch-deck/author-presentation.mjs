@@ -1,7 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = '/Users/dev/Documents/ChatGPT/Muti Agent Farm Operations Orchestrator/pitch-deck';
+const root = fileURLToPath(new URL('.', import.meta.url));
 const colors = { bg: '#F8F7F2', ink: '#183C2D', body: '#40554A', muted: '#66766B', green: '#5B8069', pale: '#E7EDE3', line: '#C8D3C6', white: '#FFFFFF' };
 
 function text(slide, value, x, y, w, h, size = 25, opts = {}) {
@@ -75,18 +76,18 @@ async function addSlide(presentation, data, index) {
         if (prev) connect(slide, prev, n);
         prev = n;
       });
-      text(slide, data.focus, 72, 594, 760, 45, 28, { font: 'Tamil Sangam MN', color: colors.ink });
-      text(slide, data.focusTranslation, 868, 598, 340, 40, 24, { color: colors.green, align: 'right' });
+      text(slide, data.focus, 72, 594, 590, 45, 28, { color: colors.ink });
+      text(slide, data.focusTranslation, 690, 594, 518, 60, 24, { color: colors.green, align: 'right' });
       break;
     }
     case 'screens': {
       const subtitle = slide.shapes.items.find(shape => shape.name === data.subtitle.slice(0, 44));
       subtitle.position = { left: 72, top: 176, width: 1136, height: 48 };
       data.images.forEach((im, i) => {
-        const x = 189 + i * 365;
-        text(slide, im.label, x - 65, 225, 300, 37, 25, { color: colors.ink, bold: true, align: 'center' });
-        slide.images.add({ path: path.join(root, 'dist', im.src), alt: im.caption, fit: 'contain', position: { left: x - 7, top: 267, width: 172, height: 374 } });
-        text(slide, im.caption, x - 65, 644, 300, 24, 15, { color: colors.muted, align: 'center' });
+        const center = 360 + i * 560;
+        text(slide, im.label, center - 225, 225, 450, 37, 25, { color: colors.ink, bold: true, align: 'center' });
+        slide.images.add({ path: path.join(root, 'dist', im.src), alt: im.caption, fit: 'contain', crop: { left: 0, top: 0.30, right: 0, bottom: 0.20 }, position: { left: center - 165, top: 267, width: 330, height: 374 } });
+        text(slide, im.caption, center - 225, 644, 450, 24, 15, { color: colors.muted, align: 'center' });
       });
       break;
     }

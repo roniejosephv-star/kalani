@@ -105,11 +105,96 @@ struct MessageCard: View {
                     }
                 }.disabled(store.busy).accessibilityIdentifier("retryMessage")
             }
+            if let id = message.calendarEntryId,
+               let entry = store.state?.calendarEntries?.first(where: { $0.id == id }) {
+                CalendarEntryCard(entry: entry, inCalendar: false)
+            }
             EvidenceList(ids: message.evidenceIds ?? [])
         }
         .padding(.vertical, 6)
         .buttonStyle(.borderless)
         .onChange(of: message.id) { _, _ in retryRequestID = UUID().uuidString }
+    }
+}
+
+struct CalendarEntryCard: View {
+    let entry: CalendarEntry
+    let inCalendar: Bool
+    @Environment(FarmStore.self) private var store
+    @State private var edit: CalendarTimeSelection?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if inCalendar {
+                Text(entry.title.isEmpty ? store.localized("எதை நினைவூட்ட வேண்டும்?", "What should I remind you about?") : entry.title)
+                    .font(.headline).accessibilityIdentifier("calendarEventTitle")
+                if let dueAt = entry.dueAt {
+                    Text(store.dateLabel(dueAt)).font(.caption).foregroundStyle(.secondary)
+                }
+            } else if entry.version > 1, entry.status != "cancelled", let dueAt = entry.dueAt {
+                Text(store.dateLabel(dueAt)).font(.caption).foregroundStyle(.secondary)
+            }
+            switch entry.status {
+            case "draft" where !entry.title.isEmpty:
+                if entry.dueAt != nil {
+                    action("save", store.localized("சேமிக்கவும்", "Save")).accessibilityIdentifier("calendarSave")
+                }
+                Button(store.localized("நேரத்தை மாற்றவும்", "Change time")) {
+                    edit = CalendarTimeSelection(date: max(entry.date ?? .now, .now.addingTimeInterval(60)))
+                }.accessibilityIdentifier("calendarChangeTime")
+            case "saved" where entry.fieldId == store.state?.fieldId && entry.cycleId == store.state?.cycleId:
+                if !inCalendar, let date = entry.date {
+                    Label(store.localized("சேமிக்கப்பட்டது", "Saved"), systemImage: "checkmark.circle")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Button(store.localized("நாள்காட்டியில் பார்க்கவும்", "Open calendar")) {
+                        store.showCalendar(on: date)
+                    }.accessibilityIdentifier("openCalendarEvent")
+                }
+                action("undo", store.localized("சேமித்ததை நீக்கவும்", "Undo")).accessibilityIdentifier("calendarUndo")
+            case "cancelled":
+                Text(store.localized("சேமித்தது நீக்கப்பட்டது", "Event removed")).font(.caption).foregroundStyle(.secondary)
+            default: EmptyView()
+            }
+        }
+        .buttonStyle(.borderless)
+        .disabled(store.busy)
+        .sheet(item: $edit) { selection in CalendarTimeEditor(entry: entry, date: selection.date) }
+    }
+
+    private func action(_ name: String, _ title: String) -> some View {
+        Button(title) { Task { _ = await store.calendarAction(name, for: entry) } }
+    }
+}
+
+private struct CalendarTimeSelection: Identifiable {
+    let id = UUID()
+    let date: Date
+}
+
+private struct CalendarTimeEditor: View {
+    let entry: CalendarEntry
+    @State var date: Date
+    @Environment(FarmStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Text(entry.title)
+                DatePicker(store.localized("தேதியும் நேரமும்", "Date and time"), selection: $date, in: Date()..., displayedComponents: [.date, .hourAndMinute])
+                Text(store.localized("இந்திய நேரம்", "India time")).font(.caption).foregroundStyle(.secondary)
+                Button(store.localized("நேரத்தைப் பயன்படுத்தவும்", "Use this time")) {
+                    Task { if await store.calendarAction("change_time", for: entry, dueAt: date) { dismiss() } }
+                }.disabled(store.busy).accessibilityIdentifier("calendarUseTime")
+            }
+            .navigationTitle(store.localized("நேரத்தை மாற்றவும்", "Change time"))
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(store.localized("மூடவும்", "Close")) { dismiss() }
+                }
+            }
+        }
+        .environment(\.timeZone, farmTimeZone)
     }
 }
 
@@ -123,9 +208,9 @@ struct EvidenceList: View {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(evidence.title ?? evidence.source).font(.subheadline.bold())
                         if let passage = evidence.passage { Text(passage).font(.caption) }
-                        if let date = evidence.observedAt { Text(store.localized("தகவல் தேதி: \(store.dateLabel(date))", "Data date: \(store.dateLabel(date))")).font(.caption) }
-                        Text(store.localized("பெறப்பட்ட நேரம்: \(store.dateLabel(evidence.retrievedAt))", "Retrieved: \(store.dateLabel(evidence.retrievedAt))")).font(.caption).foregroundStyle(.secondary)
-                        if let date = evidence.validUntil { Text(store.localized("செல்லுபடியாகும் வரை: \(store.dateLabel(date))", "Valid until: \(store.dateLabel(date))")).font(.caption) }
+                        if let date = evidence.observedAt { Text(String(format: store.localized("தகவல் தேதி: %@", "Data date: %@"), store.dateLabel(date))).font(.caption) }
+                        Text(String(format: store.localized("பெறப்பட்ட நேரம்: %@", "Retrieved: %@"), store.dateLabel(evidence.retrievedAt))).font(.caption).foregroundStyle(.secondary)
+                        if let date = evidence.validUntil { Text(String(format: store.localized("செல்லுபடியாகும் வரை: %@", "Valid until: %@"), store.dateLabel(date))).font(.caption) }
                         if let url = URL(string: evidence.url), ["https", "http"].contains(url.scheme ?? "") { Link(store.localized("மூலத்தைப் பார்க்கவும்", "View source"), destination: url).font(.caption) }
                     }.padding(.vertical, 4)
                 }
@@ -135,6 +220,7 @@ struct EvidenceList: View {
 }
 
 struct ComposerView: View {
+    var calendarRequest = false
     @Environment(FarmStore.self) private var store
     @Environment(AudioController.self) private var audio
     @Environment(\.dismiss) private var dismiss
@@ -143,7 +229,11 @@ struct ComposerView: View {
         @Bindable var store = store
         NavigationStack {
             Form {
-                Section(store.localized("இன்று உங்களுக்கு என்ன உதவி தேவை?", "What can I help with today?")) {
+                Section(calendarRequest ? store.localized("எதை நினைவூட்ட வேண்டும்?", "What should I remind you about?") : store.localized("இன்று உங்களுக்கு என்ன உதவி தேவை?", "What can I help with today?")) {
+                    if calendarRequest {
+                        Text(store.localized("நாளை காலை பம்பைப் பார்க்க நினைவூட்டு என்று சொல்லலாம்.", "Try saying “Remind me tomorrow morning to check the pump.”"))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     if !store.draft.hasAudio {
                         TextField(store.localized("இங்கே எழுதலாம்…", "Type here…"), text: $store.draft.text, axis: .vertical).lineLimit(3...8).disabled(store.draft.attempted || store.busy).accessibilityIdentifier("messageText")
                     }
@@ -154,7 +244,7 @@ struct ComposerView: View {
                         if audio.isRecording {
                             TimelineView(.periodic(from: .now, by: 1)) { context in
                                 let seconds = Int(context.date.timeIntervalSince(audio.startedAt ?? context.date))
-                                Text(store.localized("பதிவாகிறது · \(seconds) / 29 நொடிகள்", "Recording · \(seconds) / 29 seconds")).foregroundStyle(.red)
+                                Text(String(format: store.localized("பதிவாகிறது · %@ / 29 நொடிகள்", "Recording · %@ / 29 seconds"), String(seconds))).foregroundStyle(.red)
                             }
                             Button(store.localized("பதிவை நிறுத்தவும்", "Stop recording"), role: .destructive) { audio.stopRecording(); store.saveDraft() }
                         } else if store.draft.hasAudio {

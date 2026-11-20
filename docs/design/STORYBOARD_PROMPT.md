@@ -1,6 +1,6 @@
 # Tamil farmer storyboard provenance
 
-Generated with the built-in image generation tool on 17 November 2026. Review image only: controls are not interactive, audio is not connected, Tamil wording has not received native-speaker validation, and no live farm data is represented. This shows three selected states; it does not replace the complete sequence in FARMER_FLOW_REVIEW.md.
+Generated with the built-in image generation tool on 17 November 2026. Review image only: controls are not interactive, audio is not connected, Tamil wording has not received native-speaker validation, and no live farm data is represented. This shows three selected states; it does not replace the complete sequence in [FARMER_FLOW_REVIEW.md](../product/FARMER_FLOW_REVIEW.md).
 
 Output: tamil-farmer-storyboard.png
 

@@ -50,9 +50,10 @@ test('missing evidence, wrong crop and missing historical context block promotio
 test('improvement proposals cite observed events and never auto-activate', () => {
   const state = emptyFarmer();
   assert.deepEqual(proposeImprovements(state, now), []);
-  event(state, 'facts.corrected', undefined, now); event(state, 'source.failed', undefined, now); event(state, 'plan.clarification', undefined, now);
+  event(state, 'facts.corrected', undefined, now); event(state, 'source.not_configured', undefined, now); event(state, 'source.skipped', undefined, now); event(state, 'plan.clarification', undefined, now);
   assert.equal(proposeImprovements(state, now).length, 2);
   assert.equal(state.activeRelease, 'farm-v1');
+  assert.deepEqual(state.proposals.find(proposal => proposal.category === 'retrieval')?.evidenceEventIds, [2]);
   assert.deepEqual(proposeImprovements(state, now), []);
   event(state, 'plan.clarification', undefined, now);
   assert.equal(proposeImprovements(state, now)[0].category, 'routing');
@@ -85,6 +86,8 @@ test('reviewed candidate releases preserve rollback history without changing pro
   const { state, proposal } = proposalState();
   evaluateProposal(state, proposal.id, evaluation('held-out-farms'), now);
   evaluateProposal(state, proposal.id, evaluation('tamil-comprehension'), now);
+  assert.throws(() => releaseProposal(state, proposal.id, 'Reviewer', now), { code: 'evaluation_required' });
+  evaluateProposal(state, proposal.id, evaluation('english-comprehension'), now);
   assert.throws(() => releaseProposal(state, proposal.id, '', now), { code: 'reviewer_required' });
   releaseProposal(state, proposal.id, 'Named reviewer', now);
   assert.equal(state.activeRelease, `${proposal.id}@1`);
