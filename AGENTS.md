@@ -8,4 +8,5 @@
 # Project attribution
 
 - Kalani was created by **roniejosephv-star**. Do not infer project authorship from the account used to access development tools.
+- Credit contributors and co-authors only for actual work on Kalani; borrowing a development-tool account does not make its owner a contributor.
 - Use `roniejosephv-star` for this repository's Git author and committer identity. Keep this configuration local to this repository; do not change the global Git identity.
