@@ -6,6 +6,17 @@ Use `exports/kalani-source-<sha>.zip` or clone the public repository at the expo
 
 Keep the source Mac backend stopped after the final snapshot. Confirm it remains stopped before starting the restored copy. Independently running copies can resume the same work/reminders and incur provider calls. Keep the original export unchanged as the rollback point.
 
+For normal development with Git history, clone the repository on the new Mac:
+
+```sh
+mkdir -p "$HOME/Developer"
+git clone https://github.com/roniejosephv-star/kalani.git "$HOME/Developer/kalani"
+export KALANI_SOURCE="$HOME/Developer/kalani"
+git -C "$KALANI_SOURCE" rev-parse HEAD
+```
+
+Compare that commit with `sourceCommit` in the private export's root manifest. If the repository has advanced, create a continuation branch at the exported commit using `git -C "$KALANI_SOURCE" switch -c codex/continue-transfer EXPORTED_COMMIT`. The source ZIP is an offline snapshot without `.git`; prefer the clone for commits and pushes.
+
 Verify the source ZIP and DMG with their supplied SHA-256 values, then mount the DMG interactively; do not put its password in a shell command:
 
 ```sh
